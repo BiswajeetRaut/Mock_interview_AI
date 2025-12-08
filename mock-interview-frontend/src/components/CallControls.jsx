@@ -1,5 +1,5 @@
 // src/components/CallControls.jsx
-import React, { useEffect } from "react";
+import React from "react";
 import { Flex, IconButton, Box } from "@chakra-ui/react";
 import { Mic, MicOff, Volume2, VolumeX, Phone } from "lucide-react";
 
@@ -10,22 +10,6 @@ export default function CallControls({
     setSpeakerOn,
     onEnd,
 }) {
-
-    // Request microphone permission when user turns mic on
-    useEffect(() => {
-        if (micOn) {
-            navigator.mediaDevices
-                ?.getUserMedia({ audio: true })
-                .then((stream) => {
-                    console.log("Microphone access granted.", stream);
-                })
-                .catch((err) => {
-                    console.warn("Microphone permission denied:", err);
-                    setMicOn(false);
-                });
-        }
-    }, [micOn, setMicOn]);
-
     return (
         <Flex
             bg="blackAlpha.500"

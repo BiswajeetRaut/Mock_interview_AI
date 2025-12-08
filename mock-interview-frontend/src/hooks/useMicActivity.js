@@ -16,20 +16,35 @@ export default function useMicActivity(micOn) {
         let analyser = null;
         let dataArray = null;
 
-        const stopAudio = () => {
+        const stopAudio = async () => {
             console.log("🛑 Stopping audio...");
 
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            if (rafRef.current) {
+                cancelAnimationFrame(rafRef.current);
+                rafRef.current = null;
+                console.log("🛑 Animation frame canceled");
+            }
 
             if (stream) {
-                stream.getTracks().forEach((t) => t.stop());
-                console.log("🎤 Mic stream stopped");
+                stream.getTracks().forEach((track) => {
+                    track.stop();
+                    console.log(`🛑 Track ${track.kind} stopped`);
+                });
+                stream = null;
             }
+
             if (audioContext) {
-                audioContext.close();
-                console.log("🎧 AudioContext closed");
+                try {
+                    await audioContext.close();
+                    console.log("🎧 AudioContext closed");
+                } catch (e) {
+                    console.error("❌ Error closing AudioContext:", e);
+                }
+                audioContext = null;
             }
+
             setIsSpeaking(false);
+            console.log("🔇 Mic activity stopped");
         };
 
         if (!micOn) {
