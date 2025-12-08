@@ -3,10 +3,12 @@ import { Box, Container, Heading, Text, SimpleGrid, VStack, HStack, Icon, Button
 import { motion } from 'framer-motion'
 import { CheckIcon } from '@chakra-ui/icons'
 import FeatureCard from '../components/FeatureCard'
+import { useAuth } from '../context/AuthContext'
 
 const MotionBox = motion(Box)
 
-export default function Landing({ user }) {
+export default function Landing() {
+  const { user } = useAuth();
   return (
     <Container maxW="7xl" py="10">
       <MotionBox initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ChakraProvider, extendTheme, ColorModeScript } from '@chakra-ui/react'
 import App from './App'
-
+import { AuthProvider } from './context/AuthContext'
 const theme = extendTheme({
   config: { initialColorMode: 'dark', useSystemColorMode: false },
   styles: {
@@ -19,7 +19,9 @@ createRoot(document.getElementById('root')).render(
     <ChakraProvider theme={theme}>
       <ColorModeScript initialColorMode={theme.config.initialColorMode} />
       <BrowserRouter>
-        <App />
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </BrowserRouter>
     </ChakraProvider>
   </React.StrictMode>

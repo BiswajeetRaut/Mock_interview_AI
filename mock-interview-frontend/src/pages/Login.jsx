@@ -3,17 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { Box, Button, Heading, Text, VStack } from '@chakra-ui/react'
 import { motion } from 'framer-motion'
 import { api } from '../api/mockApi'
+import { fakeGoogleLogin } from "../api/auth.api";
+import { useAuth } from "../context/AuthContext";
 
 const MotionBox = motion(Box)
 
-export default function Login({ setUser }) {
+export default function Login() {
   const [loading, setLoading] = React.useState(false)
   const navigate = useNavigate()
-
-  const onGoogleSignIn = async () => {
+  const { loginWithFakeGoogle } = useAuth();
+  const Login = async () => {
     setLoading(true)
-    const u = await api.signInWithGoogle()
-    setUser(u)
+    const data = await fakeGoogleLogin();
+    loginWithFakeGoogle(data);
     setLoading(false)
     navigate('/')
   }
@@ -39,13 +41,13 @@ export default function Login({ setUser }) {
             <Text color="gray.400" mt="2">Sign in with Google to continue to Mock Interview</Text>
           </Box>
 
-          <Button onClick={onGoogleSignIn} isLoading={loading} colorScheme="whiteAlpha" bg="white" color="gray.900">
+          <Button onClick={Login} isLoading={loading} colorScheme="whiteAlpha" bg="white" color="gray.900">
             Sign in with Google
           </Button>
 
           <Text fontSize="xs" color="gray.500" textAlign="center">Or continue as a demo</Text>
 
-          <Button onClick={async () => { setLoading(true); const u = await api.signInWithGoogle(); setUser(u); setLoading(false); navigate('/'); }} variant="outline">
+          <Button onClick={Login} variant="outline">
             Continue as demo
           </Button>
 
