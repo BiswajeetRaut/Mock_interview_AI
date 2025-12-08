@@ -10,6 +10,7 @@ import TakeInterviewKnown from './pages/TakeInterviewKnown'
 import TakeInterviewCustom from './pages/TakeInterviewCustom'
 import TakeInterviewSelectCompany from './pages/TakeInterviewSelectCompany'
 import CustomAdvancedSetup from './pages/CustomAdvancedSetup'
+import ResultDetails from './pages/ResultDetails'
 
 export default function App() {
   const [user, setUser] = React.useState(null)
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/take-interview/custom-advanced" element={<CustomAdvancedSetup />} />
           <Route path="/interview/:id" element={<InterviewPage />} />
           <Route path="/results" element={<Results />} />
+          <Route path="/result-details" element={<ResultDetails />} />
           <Route path="/ask" element={<AskMockGPT />} />
         </Routes>
       </main>

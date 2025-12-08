@@ -1,5 +1,5 @@
 import React from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
   Heading,
@@ -19,9 +19,9 @@ const MotionBox = motion(Box);
 
 export default function Results() {
   const location = useLocation();
+  const navigate = useNavigate();
   const newInterview = location.state?.interview; // Retrieve new interview data from state
   const [results, setResults] = React.useState([]);
-  console.log(results)
   React.useEffect(() => {
     if (newInterview) {
       setResults((prevResults) => [newInterview, ...prevResults]); // Append new interview to results
@@ -109,7 +109,7 @@ export default function Results() {
                     size="sm"
                     colorScheme="blue"
                     variant="solid"
-                    onClick={() => alert("Detail page coming soon!")}
+                    onClick={() => navigate("/result-details")}
                   >
                     View Details
                   </Button>

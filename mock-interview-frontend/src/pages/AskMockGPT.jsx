@@ -66,7 +66,6 @@ export default function AskMockGPT() {
     setLoading(false);
   };
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -83,12 +82,12 @@ export default function AskMockGPT() {
       overflow="hidden"
       p={4}
     >
-      {/* HEADER */}
+      {/* HEADER — now aligned to chat width */}
       <HStack
+        width="70%"
         p={4}
         borderBottom="1px solid rgba(255,255,255,0.08)"
         backdropFilter="blur(12px)"
-        textAlign="left"
       >
         <Avatar size="md" bg="blue.600" name="MockGPT" />
         <Box>
@@ -171,6 +170,7 @@ export default function AskMockGPT() {
           bg="rgba(255,255,255,0.06)"
           border="1px solid rgba(255,255,255,0.1)"
           _focus={{ borderColor: "blue.400" }}
+          color="white"
         />
 
         <IconButton
@@ -178,6 +178,7 @@ export default function AskMockGPT() {
           colorScheme="blue"
           onClick={sendMessage}
           isDisabled={!input.trim()}
+          aria-label="Send"
         />
       </HStack>
     </Box>
