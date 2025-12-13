@@ -1,15 +1,15 @@
+# models/interview_model.py
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel
-from typing import List, Optional
-
 
 class InterviewRequest(BaseModel):
     company: str
     role: str
     experience: int
     jd: Optional[str] = None
-    resume: Optional[str] = None
-    topics: Optional[dict]
-
+    resume: Optional[Any] = None
+    # make topics flexible but typed: mapping string -> list of strings
+    topics: Optional[Dict[str, List[str]]] = {}
 
 class Interview(BaseModel):
     id: str
@@ -18,4 +18,4 @@ class Interview(BaseModel):
     experience: int
     jd: Optional[str] = ""
     resume: Optional[str] = None
-    topics: Optional[dict]
+    topics: Optional[Dict[str, List[str]]] = {}
