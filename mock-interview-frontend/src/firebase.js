@@ -8,13 +8,7 @@ import {getAuth} from "firebase/auth"
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyB5Jf39Jj7hNe2jXvhSp4vCJ3s_0mQjXfs",
-  authDomain: "mockinterview-97bae.firebaseapp.com",
-  projectId: "mockinterview-97bae",
-  storageBucket: "mockinterview-97bae.firebasestorage.app",
-  messagingSenderId: "157169077790",
-  appId: "1:157169077790:web:b2c1d2e1e3e8202411a80f",
-  measurementId: "G-D1TWL9PSHS"
+  
 };
 
 // Initialize Firebase
