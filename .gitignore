@@ -27,3 +27,4 @@ _pycache__/
 __pycache__/
 .env
 mock-interview-backend/serviceAccountKey.json
+mock-interview-frontend/src/firebase.js
