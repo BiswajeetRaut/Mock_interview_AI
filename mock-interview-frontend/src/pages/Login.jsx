@@ -1,24 +1,44 @@
-import React from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Box, Button, Heading, Text, VStack } from '@chakra-ui/react'
-import { motion } from 'framer-motion'
-import { api } from '../api/mockApi'
-import { fakeGoogleLogin } from "../api/auth.api";
-import { useAuth } from "../context/AuthContext";
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import { Box, Button, Heading, Text, VStack } from "@chakra-ui/react";
+import { motion } from "framer-motion";
 
-const MotionBox = motion(Box)
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { googleAuth } from "../api/auth.api";
+import { useAuth } from "../context/AuthContext";
+import {auth} from "../firebase"
+
+const MotionBox = motion(Box);
 
 export default function Login() {
-  const [loading, setLoading] = React.useState(false)
-  const navigate = useNavigate()
-  const { loginWithFakeGoogle } = useAuth();
-  const Login = async () => {
-    setLoading(true)
-    const data = await fakeGoogleLogin();
-    loginWithFakeGoogle(data);
-    setLoading(false)
-    navigate('/')
-  }
+  const [loading, setLoading] = React.useState(false);
+  const navigate = useNavigate();
+  const { setUser } = useAuth();
+
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+
+      // 1️⃣ Firebase Google popup
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+
+      // 2️⃣ Get Firebase ID token
+      const token = await result.user.getIdToken();
+
+      // 3️⃣ Send token to backend
+      const data = await googleAuth(token);
+
+      // 4️⃣ Save backend user in context
+      setUser(data.user);
+
+      navigate("/");
+    } catch (err) {
+      console.error("Google login failed", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Box display="flex" alignItems="center" justifyContent="center" minH="70vh" px="4">
@@ -38,22 +58,26 @@ export default function Login() {
         <VStack spacing="6" align="stretch">
           <Box>
             <Heading size="lg">Welcome back</Heading>
-            <Text color="gray.400" mt="2">Sign in with Google to continue to Mock Interview</Text>
+            <Text color="gray.400" mt="2">
+              Sign in with Google to continue to Mock Interview
+            </Text>
           </Box>
 
-          <Button onClick={Login} isLoading={loading} colorScheme="whiteAlpha" bg="white" color="gray.900">
+          <Button
+            onClick={handleGoogleLogin}
+            isLoading={loading}
+            colorScheme="whiteAlpha"
+            bg="white"
+            color="gray.900"
+          >
             Sign in with Google
           </Button>
 
-          <Text fontSize="xs" color="gray.500" textAlign="center">Or continue as a demo</Text>
-
-          <Button onClick={Login} variant="outline">
-            Continue as demo
-          </Button>
-
-          <Text fontSize="xs" color="gray.500" textAlign="center" mt="3">By continuing you agree to our Terms and Privacy.</Text>
+          <Text fontSize="xs" color="gray.500" textAlign="center" mt="3">
+            By continuing you agree to our Terms and Privacy.
+          </Text>
         </VStack>
       </MotionBox>
     </Box>
-  )
+  );
 }
