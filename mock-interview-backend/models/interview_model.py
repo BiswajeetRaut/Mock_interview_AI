@@ -7,9 +7,9 @@ class InterviewRequest(BaseModel):
     role: str
     experience: int
     jd: Optional[str] = None
-    resume: Optional[Any] = None
+    resume: Any
     # make topics flexible but typed: mapping string -> list of strings
-    topics: Optional[Dict[str, List[str]]] = {}
+    topics: Optional[Dict[str, Any]] = {}
 
 class Interview(BaseModel):
     id: str
@@ -17,5 +17,5 @@ class Interview(BaseModel):
     role: str
     experience: int
     jd: Optional[str] = ""
-    resume: Optional[str] = None
-    topics: Optional[Dict[str, List[str]]] = {}
+    resume: Any
+    topics: Optional[Dict[str, Any]] = {}

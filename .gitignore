@@ -26,3 +26,4 @@ venv
 _pycache__/
 __pycache__/
 .env
+mock-interview-backend/serviceAccountKey.json

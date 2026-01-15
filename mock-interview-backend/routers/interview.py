@@ -9,6 +9,7 @@ DEMO_INTERVIEWS = {}
 @router.post("/create")
 def create_interview(data: InterviewRequest):
     # pydantic validated 'data' already; convert to dict and add id
+    print(data)
     interview_id = str(uuid.uuid4())
     payload = data.dict()
     payload["id"] = interview_id
