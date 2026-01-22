@@ -79,8 +79,7 @@ export default function InterviewForm({ company, custom = false, onSubmit }) {
     };
 
     const handleContinue = () => {
-        const topics = { [types]: true }; // Convert `types` to a dictionary
-
+        const topics = { [types]: [] }; // Convert `types` to a dictionary
         onSubmit({
             company,
             role,
