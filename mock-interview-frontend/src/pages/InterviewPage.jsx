@@ -21,7 +21,12 @@ import TranscriptModal from "../components/TranscriptPanel";
 import CodingPlayground from "../components/CodingPlayground";
 import CallControls from "../components/CallControls";
 import useMicActivity from "../hooks/useMicActivity";
-import { completeInterview, fetchInterview, sendReply } from "../api/interview.api";
+import {
+  endSession,
+  fetchSessionReport,
+  fetchSessionState,
+  submitSessionAnswer,
+} from "../api/session.api";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
@@ -30,8 +35,9 @@ export default function InterviewPage() {
   const { state } = useLocation();
   const { id: idFromParams } = useParams();
   const navigate = useNavigate();
-  const { company, role, experience, id: idFromState } = state || {};
+  const { company, role, experience, id: idFromState, session: sessionFromState } = state || {};
   const id = idFromState || idFromParams;
+  const [sessionState, setSessionState] = useState(sessionFromState || null);
   const [micOn, setMicOn] = useState(true);
   const isUserSpeaking = useMicActivity(micOn);
   const silenceTimeoutRef = useRef(null);
@@ -56,6 +62,35 @@ export default function InterviewPage() {
     { speaker: "AI", text: "Welcome! I'm your AI interviewer.", time: "10:00:01" },
     { speaker: "AI", text: "Tell me about yourself.", time: "10:00:10" },
   ]);
+
+  useEffect(() => {
+    const loadSession = async () => {
+      if (!id) return;
+      try {
+        const current = await fetchSessionState(id);
+        setSessionState(current);
+        setTranscriptEntries((prev) => {
+          const seeded = current.latest_question?.question_text
+            ? [{ speaker: "AI", text: current.latest_question.question_text, time: timestamp() }]
+            : [];
+          return seeded.length ? seeded : prev;
+        });
+      } catch (error) {
+        console.error("Failed to load session state:", error);
+      }
+    };
+
+    if (!sessionFromState) {
+      loadSession();
+      return;
+    }
+
+    if (sessionFromState.latest_question?.question_text) {
+      setTranscriptEntries([
+        { speaker: "AI", text: sessionFromState.latest_question.question_text, time: timestamp() },
+      ]);
+    }
+  }, [id, sessionFromState]);
 
   // Timer
   useEffect(() => {
@@ -150,10 +185,28 @@ export default function InterviewPage() {
   const handleEnd = async () => {
     if (window.confirm("End the interview?")) {
       try {
-        await completeInterview(id, duration);
-        const interviewData = await fetchInterview(id);
-        // Navigate to the results page with the interview data
-        navigate("/results", { state: { interview: interviewData } });
+        if (!id) return;
+        await endSession(id, "completed");
+        const report = await fetchSessionReport(id);
+        navigate("/result-details", {
+          state: {
+            result: {
+              id: report.session_id,
+              company: report.company,
+              role: report.role,
+              score: report.overall_score,
+              feedback: {
+                summary: `Overall verdict: ${report.overall_verdict}`,
+                strengths: report.strengths || [],
+                improvements: report.improvement_areas || [],
+              },
+              transcript: (report.detailed_turns || []).flatMap((turn) => [
+                { speaker: "AI", text: turn.question_text },
+                { speaker: "YOU", text: turn.user_answer_transcript },
+              ]),
+            },
+          },
+        });
       } catch (error) {
         console.error("Failed to fetch interview data:", error);
         alert("An error occurred while retrieving the interview data.");
@@ -181,11 +234,21 @@ export default function InterviewPage() {
     const answer = answerDraft.trim() || finalTranscript.trim();
     if (!answer || !id) return;
     try {
-      await sendReply(id, answer);
+      const updatedSession = await submitSessionAnswer(id, answer);
+      setSessionState(updatedSession);
+      const nextQuestion = updatedSession.latest_question?.question_text;
+      const sessionFinished = !nextQuestion && updatedSession.status !== "active";
+
       setTranscriptEntries((prev) => [
         ...prev,
         { speaker: "YOU", text: answer, time: timestamp() },
-        { speaker: "AI", text: "Got it. Let's move to the next part.", time: timestamp() },
+        {
+          speaker: "AI",
+          text: sessionFinished
+            ? "Great work — this interview is complete. You can end now to see the report."
+            : nextQuestion || "Got it. Let's move to the next part.",
+          time: timestamp(),
+        },
       ]);
       setAnswerDraft("");
       resetTranscript();

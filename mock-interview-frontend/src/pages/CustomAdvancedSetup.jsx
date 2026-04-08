@@ -18,7 +18,7 @@ import {
     SYSTEM_DESIGN_TOPICS,
     MANAGERIAL_TOPICS
 } from "../data/topics";
-import { createInterview } from "../api/interview.api";
+import { startSession } from "../api/session.api";
 
 const INTERVIEW_TYPES = [
     {
@@ -89,8 +89,39 @@ export default function CustomAdvancedSetup() {
     };
 
     const handleStart = async () => {
-        const res = await createInterview({ company, role, experience, jd, resume, topics: topicsMap });
-        navigate(`/interview/${res.id}`, { state: { id: res.id, company, role, experience, jd, resume, topicsMap } });
+        const resumeData = typeof resume === "string"
+            ? resume
+            : resume?.name
+                ? `Uploaded resume file: ${resume.name}`
+                : "";
+
+        const session = await startSession({
+            user_id: "anonymous",
+            candidate_name: "Candidate",
+            company,
+            role,
+            difficulty: "medium",
+            language_preference: "python",
+            total_turns_planned: 8,
+            turn_distribution: { code: 3, resume: 3, hr: 2 },
+            resume_content: {
+                format: "text",
+                data: resumeData || jd || "",
+            },
+        });
+
+        navigate(`/interview/${session.session_id}`, {
+            state: {
+                id: session.session_id,
+                company,
+                role,
+                experience,
+                jd,
+                resume,
+                topicsMap,
+                session,
+            },
+        });
 
     };
 
