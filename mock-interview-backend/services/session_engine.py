@@ -1,17 +1,47 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
+import os
 import uuid
 from typing import Any, Dict, List, Optional
 
+try:
+    from redis import Redis
+except ImportError:  # optional dependency in local dev
+    Redis = None
+
 
 SESSION_STORE: Dict[str, Dict[str, Any]] = {}
+SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "7200"))
+REDIS_URL = os.getenv("REDIS_URL", "").strip()
+
+_REDIS_CLIENT = Redis.from_url(REDIS_URL, decode_responses=True) if Redis and REDIS_URL else None
 
 AGENT_ORDER: List[str] = ["code", "resume", "hr"]
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _session_key(session_id: str) -> str:
+    return f"session:{session_id}"
+
+
+def _persist_session(session: Dict[str, Any]) -> None:
+    session_id = session["session_id"]
+    if _REDIS_CLIENT:
+        _REDIS_CLIENT.set(_session_key(session_id), json.dumps(session), ex=SESSION_TTL_SECONDS)
+        return
+    SESSION_STORE[session_id] = session
+
+
+def _fetch_session(session_id: str) -> Optional[Dict[str, Any]]:
+    if _REDIS_CLIENT:
+        raw = _REDIS_CLIENT.get(_session_key(session_id))
+        return json.loads(raw) if raw else None
+    return SESSION_STORE.get(session_id)
 
 
 def _parse_resume_text(text: str) -> Dict[str, Any]:
@@ -253,16 +283,18 @@ def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
         "locked": False,
         "request_cache": {},
     }
-    SESSION_STORE[session_id] = session
+    _persist_session(session)
     return session
 
 
 def get_session(session_id: str) -> Optional[Dict[str, Any]]:
-    return SESSION_STORE.get(session_id)
+    return _fetch_session(session_id)
 
 
 def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, Any]:
-    session = SESSION_STORE[session_id]
+    session = _fetch_session(session_id)
+    if not session:
+        raise ValueError("Session not found")
     if session["status"] != "active":
         raise ValueError("Session is not active")
     if session["locked"]:
@@ -313,6 +345,7 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             session["pending_turn_id"] = None
             if request_id:
                 session["request_cache"][request_id] = turn["turn_id"]
+            _persist_session(session)
             return session
 
         session["turn_counter"] += 1
@@ -326,14 +359,19 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
         )
         if request_id:
             session["request_cache"][request_id] = turn["turn_id"]
+        _persist_session(session)
         return session
     finally:
         session["locked"] = False
+        _persist_session(session)
 
 
 def end_session(session_id: str, reason: str) -> Dict[str, Any]:
-    session = SESSION_STORE[session_id]
+    session = _fetch_session(session_id)
+    if not session:
+        raise ValueError("Session not found")
     if session["status"] != "completed":
         session["status"] = "aborted" if reason in {"aborted", "manual_end"} else "completed"
         session["final_scores"] = _compute_final_scores(session)
+        _persist_session(session)
     return session
