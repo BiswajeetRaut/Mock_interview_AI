@@ -6,6 +6,9 @@ import {
   HStack,
   Text,
   IconButton,
+  Button,
+  Textarea,
+  VStack,
 } from "@chakra-ui/react";
 import {
   MessageSquare,
@@ -40,6 +43,7 @@ export default function InterviewPage() {
   const [isAISpeaking, setIsAISpeaking] = useState(false);
 
   const [code, setCode] = useState("// Start coding here...\n");
+  const [answerDraft, setAnswerDraft] = useState("");
   const {
     transcript: speechTranscript,
     finalTranscript,
@@ -48,7 +52,7 @@ export default function InterviewPage() {
     resetTranscript,
   } = useSpeechRecognition();
 
-  const [transcriptEntries] = useState([
+  const [transcriptEntries, setTranscriptEntries] = useState([
     { speaker: "AI", text: "Welcome! I'm your AI interviewer.", time: "10:00:01" },
     { speaker: "AI", text: "Tell me about yourself.", time: "10:00:10" },
   ]);
@@ -123,14 +127,9 @@ export default function InterviewPage() {
   // }, [speechTranscript]);
 
   useEffect(() => {
-    if (!finalTranscript.trim()) return;
-    console.log("[interview][speech][final]", finalTranscript);
-    if (id) {
-      sendReply(id, finalTranscript).catch((error) => {
-        console.error("Failed to save transcript reply:", error);
-      });
-    }
-  }, [finalTranscript, id]);
+    if (!speechTranscript?.trim()) return;
+    setAnswerDraft(speechTranscript);
+  }, [speechTranscript]);
 
   useEffect(() => {
     return () => {
@@ -159,6 +158,40 @@ export default function InterviewPage() {
         console.error("Failed to fetch interview data:", error);
         alert("An error occurred while retrieving the interview data.");
       }
+    }
+  };
+
+  const timestamp = () => new Date().toLocaleTimeString();
+
+  const handleRecordToggle = () => {
+    if (!browserSupportsSpeechRecognition) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+    if (listening) {
+      SpeechRecognition.stopListening();
+      return;
+    }
+    resetTranscript();
+    setAnswerDraft("");
+    SpeechRecognition.startListening({ continuous: true, language: "en-US" });
+  };
+
+  const handleSendAnswer = async () => {
+    const answer = answerDraft.trim() || finalTranscript.trim();
+    if (!answer || !id) return;
+    try {
+      await sendReply(id, answer);
+      setTranscriptEntries((prev) => [
+        ...prev,
+        { speaker: "YOU", text: answer, time: timestamp() },
+        { speaker: "AI", text: "Got it. Let's move to the next part.", time: timestamp() },
+      ]);
+      setAnswerDraft("");
+      resetTranscript();
+    } catch (error) {
+      console.error("Failed to send answer:", error);
+      alert("Could not send your answer. Please try again.");
     }
   };
 
@@ -275,6 +308,44 @@ export default function InterviewPage() {
               setSpeakerOn={setSpeakerOn}
               onEnd={handleEnd}
             />
+
+            <Box
+              bg="whiteAlpha.100"
+              border="1px solid rgba(148,163,184,0.35)"
+              borderRadius="lg"
+              p={3}
+            >
+              <VStack spacing={3} align="stretch">
+                <Text fontSize="sm" color="gray.300">
+                  Answer input (record or type, then send)
+                </Text>
+                <Textarea
+                  value={answerDraft}
+                  onChange={(e) => setAnswerDraft(e.target.value)}
+                  placeholder="Type your answer here or use Record Answer..."
+                  bg="blackAlpha.500"
+                  borderColor="whiteAlpha.300"
+                  minH="90px"
+                />
+                <HStack spacing={3}>
+                  <Button
+                    size="sm"
+                    colorScheme={listening ? "red" : "purple"}
+                    onClick={handleRecordToggle}
+                  >
+                    {listening ? "Stop Recording" : "Record Answer"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    onClick={handleSendAnswer}
+                    isDisabled={!answerDraft.trim() && !finalTranscript.trim()}
+                  >
+                    Send Answer
+                  </Button>
+                </HStack>
+              </VStack>
+            </Box>
 
           </Flex>
 
