@@ -11,22 +11,24 @@ import {
   MessageSquare,
   Code as CodeIcon,
 } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import VideoCard from "../components/VideoCard";
 import TranscriptModal from "../components/TranscriptPanel";
 import CodingPlayground from "../components/CodingPlayground";
 import CallControls from "../components/CallControls";
 import useMicActivity from "../hooks/useMicActivity";
-import { fetchInterview } from "../api/interview.api";
+import { completeInterview, fetchInterview, sendReply } from "../api/interview.api";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 
 export default function InterviewPage() {
   const { state } = useLocation();
+  const { id: idFromParams } = useParams();
   const navigate = useNavigate();
-  const { company, role, experience, id } = state || {};
+  const { company, role, experience, id: idFromState } = state || {};
+  const id = idFromState || idFromParams;
   const [micOn, setMicOn] = useState(true);
   const isUserSpeaking = useMicActivity(micOn);
   const silenceTimeoutRef = useRef(null);
@@ -123,7 +125,12 @@ export default function InterviewPage() {
   useEffect(() => {
     if (!finalTranscript.trim()) return;
     console.log("[interview][speech][final]", finalTranscript);
-  }, [finalTranscript]);
+    if (id) {
+      sendReply(id, finalTranscript).catch((error) => {
+        console.error("Failed to save transcript reply:", error);
+      });
+    }
+  }, [finalTranscript, id]);
 
   useEffect(() => {
     return () => {
@@ -144,6 +151,7 @@ export default function InterviewPage() {
   const handleEnd = async () => {
     if (window.confirm("End the interview?")) {
       try {
+        await completeInterview(id, duration);
         const interviewData = await fetchInterview(id);
         // Navigate to the results page with the interview data
         navigate("/results", { state: { interview: interviewData } });

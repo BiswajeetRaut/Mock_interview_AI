@@ -47,7 +47,8 @@ export default function CustomAdvancedSetup() {
     const { state } = useLocation();
     const navigate = useNavigate();
 
-    const { company, role, experience, jd, resume } = state;
+    const initialResume = state?.resume ?? null;
+    const { company, role, experience, jd } = state || {};
 
     const bg = useColorModeValue("gray.100", "gray.900");
 
@@ -58,6 +59,7 @@ export default function CustomAdvancedSetup() {
         "managerial": [],
         "resume-based": []
     });
+    const [resume, setResume] = useState(initialResume);
 
     const fileInputRef = useRef();
 
@@ -91,6 +93,20 @@ export default function CustomAdvancedSetup() {
         navigate(`/interview/${res.id}`, { state: { id: res.id, company, role, experience, jd, resume, topicsMap } });
 
     };
+
+    if (!state) {
+        return (
+            <Box maxW="850px" mx="auto" mt="40px" p="8" bg={bg} rounded="xl" shadow="xl">
+                <Heading size="md">Setup expired</Heading>
+                <Text mt="3" color="gray.400">
+                    Please restart the interview setup flow.
+                </Text>
+                <Button mt="6" colorScheme="blue" onClick={() => navigate("/take-interview")}>
+                    Go to Setup
+                </Button>
+            </Box>
+        );
+    }
 
     return (
         <Box

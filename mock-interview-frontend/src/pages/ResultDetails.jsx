@@ -11,13 +11,13 @@ import {
     Icon,
 } from "@chakra-ui/react";
 import { CheckCircle, XCircle, Star, MessageSquare } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 export default function ResultDetails() {
-    const navigate = useNavigate();
+    const { state } = useLocation();
+    const selectedResult = state?.result;
 
-    // Dummy data (AI evaluation)
-    const result = {
+    const fallbackResult = {
         id: "demo-123",
         company: "Accenture",
         role: "SDE I",
@@ -56,6 +56,20 @@ export default function ResultDetails() {
             },
         ],
     };
+    const result = selectedResult
+        ? {
+            ...selectedResult,
+            summary: selectedResult.feedback?.summary || "Interview completed.",
+            strengths: selectedResult.feedback?.strengths || [],
+            weaknesses: selectedResult.feedback?.improvements || [],
+            recommendations: selectedResult.feedback?.improvements || [],
+            timeline: (selectedResult.transcript || []).map((entry) => ({
+                q: entry.text,
+                ai: entry.speaker === "AI" ? "AI prompt" : "Your response",
+                type: entry.speaker === "AI" ? "behavioral" : "dsa",
+            })),
+        }
+        : fallbackResult;
 
     return (
         <Box

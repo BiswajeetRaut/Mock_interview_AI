@@ -5,15 +5,13 @@ import {
   Heading,
   VStack,
   Text,
-  HStack,
   Flex,
-  Badge,
   Button,
-  Divider,
   Icon,
 } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import { fetchInterviews } from "../api/interview.api";
 
 const MotionBox = motion(Box);
 
@@ -27,6 +25,14 @@ export default function Results() {
       setResults((prevResults) => [newInterview, ...prevResults]); // Append new interview to results
     }
   }, [newInterview]);
+
+  React.useEffect(() => {
+    fetchInterviews()
+      .then((items) => setResults(items))
+      .catch((error) => {
+        console.error("Failed to load interviews:", error);
+      });
+  }, []);
   return (
     <Box
       px={{ base: 4, md: 8 }}
@@ -109,7 +115,7 @@ export default function Results() {
                     size="sm"
                     colorScheme="blue"
                     variant="solid"
-                    onClick={() => navigate("/result-details")}
+                    onClick={() => navigate("/result-details", { state: { result: r } })}
                   >
                     View Details
                   </Button>
