@@ -64,11 +64,7 @@ def session_report(session_id: str):
         "interview_date": session["created_at"][:10],
         "overall_score": session["final_scores"]["overall"],
         "overall_verdict": "good" if (session["final_scores"]["overall"] or 0) >= 70 else "average",
-        "domain_scores": {
-            "code": {"score": session["final_scores"]["code"]},
-            "resume": {"score": session["final_scores"]["resume"]},
-            "hr": {"score": session["final_scores"]["hr"]},
-        },
+        "domain_scores": session["final_scores"],
         "strengths": session["coverage_context"]["strength_tags"][:5],
         "improvement_areas": session["coverage_context"]["weakness_tags"][:5],
         "detailed_turns": session["turns"],

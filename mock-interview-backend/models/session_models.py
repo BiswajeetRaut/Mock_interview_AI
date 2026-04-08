@@ -26,6 +26,7 @@ class SessionStartRequest(BaseModel):
 
 class SessionAnswerRequest(BaseModel):
     answer_text: str
+    request_id: Optional[str] = None
     code_submitted: Optional[str] = None
     language: Optional[str] = None
     time_taken_seconds: int = 0
@@ -45,7 +46,7 @@ class SessionStateResponse(BaseModel):
     current_agent: AgentType
     coverage_context: Dict[str, Any]
     turns: List[Dict[str, Any]]
-    final_scores: Dict[str, Optional[float]]
+    final_scores: Dict[str, Any]
     latest_question: Optional[Dict[str, Any]] = None
     pending_turn_id: Optional[str] = None
     locked: bool = False
