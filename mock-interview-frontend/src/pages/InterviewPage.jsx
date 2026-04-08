@@ -1,5 +1,5 @@
 // src/pages/InterviewPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Flex,
   Box,
@@ -8,11 +8,6 @@ import {
   IconButton,
 } from "@chakra-ui/react";
 import {
-  Mic,
-  MicOff,
-  Volume2,
-  VolumeX,
-  Phone,
   MessageSquare,
   Code as CodeIcon,
 } from "lucide-react";
@@ -24,14 +19,17 @@ import CodingPlayground from "../components/CodingPlayground";
 import CallControls from "../components/CallControls";
 import useMicActivity from "../hooks/useMicActivity";
 import { fetchInterview } from "../api/interview.api";
+import SpeechRecognition, {
+  useSpeechRecognition,
+} from "react-speech-recognition";
 
 export default function InterviewPage() {
   const { state } = useLocation();
-  console.log(state)
   const navigate = useNavigate();
   const { company, role, experience, id } = state || {};
   const [micOn, setMicOn] = useState(true);
   const isUserSpeaking = useMicActivity(micOn);
+  const silenceTimeoutRef = useRef(null);
   const [speakerOn, setSpeakerOn] = useState(true);
   const [showTranscript, setShowTranscript] = useState(false);
   const [showCode, setShowCode] = useState(false);
@@ -40,8 +38,15 @@ export default function InterviewPage() {
   const [isAISpeaking, setIsAISpeaking] = useState(false);
 
   const [code, setCode] = useState("// Start coding here...\n");
+  const {
+    transcript: speechTranscript,
+    finalTranscript,
+    listening,
+    browserSupportsSpeechRecognition,
+    resetTranscript,
+  } = useSpeechRecognition();
 
-  const [transcript] = useState([
+  const [transcriptEntries] = useState([
     { speaker: "AI", text: "Welcome! I'm your AI interviewer.", time: "10:00:01" },
     { speaker: "AI", text: "Tell me about yourself.", time: "10:00:10" },
   ]);
@@ -61,6 +66,72 @@ export default function InterviewPage() {
       }
     }, 5000);
     return () => clearInterval(aiInterval);
+  }, []);
+
+  useEffect(() => {
+    if (!browserSupportsSpeechRecognition) {
+      console.warn("[speech] Browser does not support speech recognition.");
+      return;
+    }
+
+    if (!micOn) {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+
+      SpeechRecognition.abortListening();
+      resetTranscript();
+      return;
+    }
+
+    if (isUserSpeaking) {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+
+      if (!listening) {
+        SpeechRecognition.startListening({
+          continuous: true,
+          language: "en-US",
+        });
+      }
+
+      return;
+    }
+
+    if (listening && !silenceTimeoutRef.current) {
+      silenceTimeoutRef.current = setTimeout(() => {
+        SpeechRecognition.stopListening();
+        silenceTimeoutRef.current = null;
+      }, 1200);
+    }
+  }, [
+    browserSupportsSpeechRecognition,
+    isUserSpeaking,
+    listening,
+    micOn,
+    resetTranscript,
+  ]);
+
+  // useEffect(() => {
+  //   if (!speechTranscript.trim()) return;
+  //   console.log("[interview][speech][interim]", speechTranscript);
+  // }, [speechTranscript]);
+
+  useEffect(() => {
+    if (!finalTranscript.trim()) return;
+    console.log("[interview][speech][final]", finalTranscript);
+  }, [finalTranscript]);
+
+  useEffect(() => {
+    return () => {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+      SpeechRecognition.abortListening();
+    };
   }, []);
 
 
@@ -89,7 +160,7 @@ export default function InterviewPage() {
       <TranscriptModal
         isOpen={showTranscript}
         onClose={() => setShowTranscript(false)}
-        transcript={transcript}
+        transcript={transcriptEntries}
       />
 
       <Flex

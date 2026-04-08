@@ -78,8 +78,6 @@ export default function useMicActivity(micOn) {
                     analyser.getByteFrequencyData(dataArray);
                     const volume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
 
-                    console.log("🔊 Volume:", volume);
-
                     setIsSpeaking(volume > 18);
 
                     rafRef.current = requestAnimationFrame(detect);

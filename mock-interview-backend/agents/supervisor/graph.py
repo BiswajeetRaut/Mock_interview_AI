@@ -7,6 +7,9 @@ This module builds a state graph that manages the flow between different intervi
 from langgraph.graph import StateGraph, END
 from .state import InterviewState
 from .node import supervisor_node
+from agents.technical_coding.node import generate_coding_question_node as technical_node
+from agents.resume_based.node import resume_agent_node
+from agents.manegerial.node import hr_agent_node
 
 
 def router(state: InterviewState) -> str:
@@ -72,3 +75,8 @@ def build_graph(technical_node, resume_node, hr_node):
     )
 
     return graph.compile()
+
+
+app = build_graph(technical_node, resume_agent_node, hr_agent_node)
+
+print(app.get_graph().draw_mermaid())
