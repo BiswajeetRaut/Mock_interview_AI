@@ -63,18 +63,38 @@ export default function InterviewPage() {
     { speaker: "AI", text: "Tell me about yourself.", time: "10:00:10" },
   ]);
 
+  const timestamp = () => new Date().toLocaleTimeString();
+
+  const buildTranscriptFromSession = (session) => {
+    const entries = (session?.turns || []).flatMap((turn) => ([
+      { speaker: "AI", text: turn.question_text, time: turn.completed_at || timestamp() },
+      { speaker: "YOU", text: turn.user_answer_transcript, time: turn.completed_at || timestamp() },
+    ]));
+
+    const latestQuestion = session?.latest_question?.question_text;
+    if (latestQuestion) {
+      const alreadyPresent = entries.some(
+        (entry) => entry.speaker === "AI" && entry.text === latestQuestion,
+      );
+      if (!alreadyPresent) {
+        entries.push({ speaker: "AI", text: latestQuestion, time: timestamp() });
+      }
+    }
+
+    return entries.length
+      ? entries
+      : [
+        { speaker: "AI", text: "Welcome! I'm your AI interviewer.", time: timestamp() },
+      ];
+  };
+
   useEffect(() => {
     const loadSession = async () => {
       if (!id) return;
       try {
         const current = await fetchSessionState(id);
         setSessionState(current);
-        setTranscriptEntries((prev) => {
-          const seeded = current.latest_question?.question_text
-            ? [{ speaker: "AI", text: current.latest_question.question_text, time: timestamp() }]
-            : [];
-          return seeded.length ? seeded : prev;
-        });
+        setTranscriptEntries(buildTranscriptFromSession(current));
       } catch (error) {
         console.error("Failed to load session state:", error);
       }
@@ -85,11 +105,7 @@ export default function InterviewPage() {
       return;
     }
 
-    if (sessionFromState.latest_question?.question_text) {
-      setTranscriptEntries([
-        { speaker: "AI", text: sessionFromState.latest_question.question_text, time: timestamp() },
-      ]);
-    }
+    setTranscriptEntries(buildTranscriptFromSession(sessionFromState));
   }, [id, sessionFromState]);
 
   // Timer
@@ -186,7 +202,8 @@ export default function InterviewPage() {
     if (window.confirm("End the interview?")) {
       try {
         if (!id) return;
-        await endSession(id, "completed");
+        const reason = sessionState?.status === "active" ? "manual_end" : "completed";
+        await endSession(id, reason);
         const report = await fetchSessionReport(id);
         navigate("/result-details", {
           state: {
@@ -214,8 +231,6 @@ export default function InterviewPage() {
     }
   };
 
-  const timestamp = () => new Date().toLocaleTimeString();
-
   const handleRecordToggle = () => {
     if (!browserSupportsSpeechRecognition) {
       alert("Speech recognition is not supported in this browser.");
@@ -234,7 +249,9 @@ export default function InterviewPage() {
     const answer = answerDraft.trim() || finalTranscript.trim();
     if (!answer || !id) return;
     try {
-      const updatedSession = await submitSessionAnswer(id, answer);
+      const requestId =
+        globalThis.crypto?.randomUUID?.() || `REQ_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const updatedSession = await submitSessionAnswer(id, answer, requestId);
       setSessionState(updatedSession);
       const nextQuestion = updatedSession.latest_question?.question_text;
       const sessionFinished = !nextQuestion && updatedSession.status !== "active";

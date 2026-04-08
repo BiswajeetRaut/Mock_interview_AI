@@ -334,6 +334,6 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
 def end_session(session_id: str, reason: str) -> Dict[str, Any]:
     session = SESSION_STORE[session_id]
     if session["status"] != "completed":
-        session["status"] = "aborted" if reason == "aborted" else "completed"
+        session["status"] = "aborted" if reason in {"aborted", "manual_end"} else "completed"
         session["final_scores"] = _compute_final_scores(session)
     return session
