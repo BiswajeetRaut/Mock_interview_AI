@@ -64,15 +64,26 @@ def session_report(session_id: str):
         "interview_date": session["created_at"][:10],
         "overall_score": session["final_scores"]["overall"],
         "overall_verdict": "good" if (session["final_scores"]["overall"] or 0) >= 70 else "average",
-        "domain_scores": {
-            "code": {"score": session["final_scores"]["code"]},
-            "resume": {"score": session["final_scores"]["resume"]},
-            "hr": {"score": session["final_scores"]["hr"]},
-        },
+        "domain_scores": session["final_scores"],
         "strengths": session["coverage_context"]["strength_tags"][:5],
         "improvement_areas": session["coverage_context"]["weakness_tags"][:5],
         "detailed_turns": session["turns"],
         "hiring_recommendation": "consider"
         if (session["final_scores"]["overall"] or 0) >= 60
         else "no",
+    }
+
+
+@router.get("/{session_id}/logs")
+def session_logs(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "session_id": session_id,
+        "status": session.get("status"),
+        "turn_plan": session.get("turn_plan", []),
+        "current_agent": session.get("current_agent"),
+        "latest_question": session.get("latest_question"),
+        "debug_trace": session.get("debug_trace", []),
     }

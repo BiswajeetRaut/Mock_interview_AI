@@ -18,7 +18,8 @@ import {
     SYSTEM_DESIGN_TOPICS,
     MANAGERIAL_TOPICS
 } from "../data/topics";
-import { createInterview } from "../api/interview.api";
+import { startSession } from "../api/session.api";
+import { buildSessionStartPayload } from "../utils/sessionPayload";
 
 const INTERVIEW_TYPES = [
     {
@@ -89,8 +90,35 @@ export default function CustomAdvancedSetup() {
     };
 
     const handleStart = async () => {
-        const res = await createInterview({ company, role, experience, jd, resume, topics: topicsMap });
-        navigate(`/interview/${res.id}`, { state: { id: res.id, company, role, experience, jd, resume, topicsMap } });
+        const selectedTopics = selectedTypes.reduce((acc, typeId) => {
+            acc[typeId] = topicsMap[typeId] || [];
+            return acc;
+        }, {});
+
+        const payload = await buildSessionStartPayload({
+            company,
+            role,
+            experience,
+            jd,
+            resume,
+            selectedTypes,
+            topics: selectedTopics,
+        });
+
+        const session = await startSession(payload);
+
+        navigate(`/interview/${session.session_id}`, {
+            state: {
+                id: session.session_id,
+                company,
+                role,
+                experience,
+                jd,
+                resume,
+                topicsMap,
+                session,
+            },
+        });
 
     };
 

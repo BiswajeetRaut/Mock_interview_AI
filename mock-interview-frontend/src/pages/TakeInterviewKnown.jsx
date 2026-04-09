@@ -2,7 +2,8 @@ import React from "react";
 import { Box, Heading, useColorModeValue } from "@chakra-ui/react";
 import InterviewForm from "../components/InterviewForm";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { createInterview } from "../api/interview.api";
+import { startSession } from "../api/session.api";
+import { buildSessionStartPayload } from "../utils/sessionPayload";
 
 export default function TakeInterviewKnown() {
     const [params] = useSearchParams();
@@ -11,8 +12,25 @@ export default function TakeInterviewKnown() {
     const bg = useColorModeValue("gray.100", "gray.800");
 
     const handleSubmit = async (formData) => {
-        const res = await createInterview(formData);
-        navigate(`/interview/${res.id}`, { state: { ...formData, id: res.id } });
+        const selectedTypes = Object.keys(formData.topics || {});
+        const payload = await buildSessionStartPayload({
+            company: formData.company,
+            role: formData.role,
+            experience: formData.experience,
+            jd: formData.jd,
+            resume: formData.resume,
+            selectedTypes,
+            topics: formData.topics,
+        });
+        const session = await startSession(payload);
+
+        navigate(`/interview/${session.session_id}`, {
+            state: {
+                ...formData,
+                id: session.session_id,
+                session,
+            },
+        });
     };
 
 

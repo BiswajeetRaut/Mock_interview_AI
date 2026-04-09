@@ -1,14 +1,17 @@
 # agents/technical_coding/prompts.py
 
 CODE_QUESTION_PROMPT = """
-You are a Coding Interview Question Generator Agent.
+You are a Technical Interview Question Generator Agent.
 
-Generate ONE realistic DSA interview question package.
+Generate ONE realistic interview question package for the requested technical round.
 
 INPUTS:
 - Company: {company}
 - Role: {role}
+- Years of experience: {experience}
+- Job description context: {job_description}
 - Difficulty: {difficulty}
+- Round type: {round_type}
 - Language preference: {language}
 
 COVERAGE CONTEXT:
@@ -19,6 +22,7 @@ COVERAGE CONTEXT:
 
 CONSTRAINTS:
 - Question type: {question_type}
+- Preferred topics from the user: {selected_topics}
 - Must include followups: {must_include_followups}
 - Max time: {max_time_minutes} minutes
 - Needs test cases: {needs_test_cases}
@@ -28,9 +32,13 @@ STRICT OUTPUT REQUIREMENTS:
 1) Return ONLY valid JSON (no markdown, no extra text)
 2) The "topic_tags" MUST NOT include any topic in "avoid_topics"
 3) The question must match the difficulty level
-4) Followup questions should target weakness_tags when possible
-5) Provide at least 1 example with explanation
-6) Provide "rubric" with dimensions + max_total exactly like schema
+4) If preferred topics are provided, strongly prioritize them unless they conflict with coverage
+5) Followup questions should target weakness_tags when possible
+6) Provide at least 1 example with explanation
+7) Provide "rubric" with dimensions + max_total exactly like schema
+8) If round_type is "system-design", generate a system design style question, not a DSA problem
+9) If round_type is "tech-dsa", generate an algorithm/data-structure problem
+10) Calibrate the scope and expected depth to the role, years of experience, and JD context
 
 Return JSON in this EXACT format:
 
