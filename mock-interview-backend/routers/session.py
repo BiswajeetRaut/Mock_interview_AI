@@ -72,3 +72,18 @@ def session_report(session_id: str):
         if (session["final_scores"]["overall"] or 0) >= 60
         else "no",
     }
+
+
+@router.get("/{session_id}/logs")
+def session_logs(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "session_id": session_id,
+        "status": session.get("status"),
+        "turn_plan": session.get("turn_plan", []),
+        "current_agent": session.get("current_agent"),
+        "latest_question": session.get("latest_question"),
+        "debug_trace": session.get("debug_trace", []),
+    }

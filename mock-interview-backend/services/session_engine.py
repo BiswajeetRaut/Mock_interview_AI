@@ -59,6 +59,31 @@ def _parse_resume_text(text: str) -> Dict[str, Any]:
     }
 
 
+def _log_event(session: Dict[str, Any], event: str, data: Dict[str, Any]) -> None:
+    logs = session.setdefault("debug_trace", [])
+    logs.append(
+        {
+            "timestamp": _now_iso(),
+            "event": event,
+            "turn_counter": session.get("turn_counter"),
+            "data": data,
+        }
+    )
+
+
+def _pick_non_repeated(pool: List[Dict[str, Any]], asked_topics: List[str], topic_key: str) -> Dict[str, Any]:
+    asked_set = set([topic for topic in asked_topics if topic])
+    for item in pool:
+        topic_value = item.get(topic_key)
+        if isinstance(topic_value, list):
+            primary = topic_value[0] if topic_value else None
+        else:
+            primary = topic_value
+        if primary not in asked_set:
+            return item
+    return pool[len(asked_topics) % len(pool)]
+
+
 def _build_turn_plan(turn_distribution: Dict[str, int], total_turns: int) -> List[str]:
     remaining = {
         "code": max(0, int(turn_distribution.get("code", 0))),
@@ -79,15 +104,10 @@ def _build_turn_plan(turn_distribution: Dict[str, int], total_turns: int) -> Lis
 
 def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[str, Any]:
     return {
-        "question_id": f"Q_CODE_{uuid.uuid4().hex[:6]}",
         "agent_type": "code",
-        "topic_tags": ["arrays", "sliding_window"],
         "difficulty": difficulty,
-        "question_text": f"Given an integer array nums, return the minimum length subarray with sum >= target. Discuss an approach expected for a {role} interview at {company}.",
-        "input_output_format": {"input": "nums: int[], target: int", "output": "int"},
-        "constraints": ["1 <= n <= 1e5", "1 <= nums[i] <= 1e4"],
-        "expected_solution_outline": ["sliding window", "expand right", "shrink left when sum >= target"],
-        "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)"},
+        "input_output_format": {"input": "varies by problem", "output": "varies by problem"},
+        "constraints": ["1 <= n <= 1e5"],
         "rubric": {
             "dimensions": [
                 {"key": "correctness", "max_score": 5},
@@ -97,19 +117,54 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             ],
             "max_total": 20,
         },
-        "followup_questions": [
-            "Why is this valid only for positive integers?",
-            "How would your solution change with negative numbers?",
+        "catalog": [
+            {
+                "topic_tags": ["arrays", "sliding_window"],
+                "question_text": f"Given an integer array nums, return the minimum length subarray with sum >= target for a {role} interview at {company}.",
+                "expected_solution_outline": ["sliding window", "expand right", "shrink left when sum >= target"],
+                "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)"},
+                "followup_questions": [
+                    "Why is this valid only for positive integers?",
+                    "How would your solution change with negative numbers?",
+                ],
+            },
+            {
+                "topic_tags": ["hashmap", "prefix_sum"],
+                "question_text": f"Find if a subarray with sum k exists in nums using an approach expected at {company}.",
+                "expected_solution_outline": ["prefix sum", "hashmap lookup"],
+                "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(n)"},
+                "followup_questions": [
+                    "How do you handle repeated prefix sums?",
+                    "Can this be optimized for memory?",
+                ],
+            },
+            {
+                "topic_tags": ["two_pointers", "strings"],
+                "question_text": f"Given a string, find the longest substring without repeating characters and explain trade-offs.",
+                "expected_solution_outline": ["two pointers", "character index map"],
+                "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)/O(k)"},
+                "followup_questions": [
+                    "What changes for unicode input?",
+                    "How would you return the substring itself?",
+                ],
+            },
+            {
+                "topic_tags": ["intervals", "sorting"],
+                "question_text": "Merge overlapping intervals and discuss why sorting first is needed.",
+                "expected_solution_outline": ["sort by start", "merge sweep"],
+                "time_space_targets": {"expected_time": "O(n log n)", "expected_space": "O(n)"},
+                "followup_questions": [
+                    "Can you do this in-place?",
+                    "How do you prove correctness?",
+                ],
+            },
         ],
     }
 
 
 def _generate_resume_question() -> Dict[str, Any]:
     return {
-        "question_id": f"Q_RES_{uuid.uuid4().hex[:6]}",
         "agent_type": "resume",
-        "topic_tag": "project_challenges",
-        "question_text": "Tell me about a real project challenge from your resume and walk through Situation, Task, Action, and Result.",
         "expected_framework": "STAR",
         "rubric": {
             "dimensions": [
@@ -120,19 +175,38 @@ def _generate_resume_question() -> Dict[str, Any]:
             ],
             "max_total": 20,
         },
-        "followup_questions": [
-            "What would you do differently next time?",
-            "What metric proved success?",
+        "catalog": [
+            {
+                "topic_tag": "project_challenges",
+                "question_text": "Tell me about a real project challenge from your resume and walk through Situation, Task, Action, and Result.",
+                "followup_questions": [
+                    "What would you do differently next time?",
+                    "What metric proved success?",
+                ],
+            },
+            {
+                "topic_tag": "teamwork",
+                "question_text": "Describe a time you had a team disagreement and how you resolved it.",
+                "followup_questions": [
+                    "What did you learn about communication?",
+                    "How did your solution impact delivery?",
+                ],
+            },
+            {
+                "topic_tag": "ownership",
+                "question_text": "Tell me about a feature where you took end-to-end ownership.",
+                "followup_questions": [
+                    "How did you prioritize trade-offs?",
+                    "What metrics did you monitor post-release?",
+                ],
+            },
         ],
     }
 
 
 def _generate_hr_question() -> Dict[str, Any]:
     return {
-        "question_id": f"Q_HR_{uuid.uuid4().hex[:6]}",
         "agent_type": "hr",
-        "topic_tag": "adaptability",
-        "question_text": "Describe a situation where project requirements changed suddenly. How did you adapt?",
         "rubric": {
             "dimensions": [
                 {"key": "self_awareness", "max_score": 5},
@@ -142,19 +216,65 @@ def _generate_hr_question() -> Dict[str, Any]:
             ],
             "max_total": 20,
         },
-        "followup_questions": [
-            "How did your communication style help in this situation?",
-            "What did you learn that changed your approach afterwards?",
+        "catalog": [
+            {
+                "topic_tag": "adaptability",
+                "question_text": "Describe a situation where project requirements changed suddenly. How did you adapt?",
+                "followup_questions": [
+                    "How did your communication style help in this situation?",
+                    "What did you learn that changed your approach afterwards?",
+                ],
+            },
+            {
+                "topic_tag": "conflict_resolution",
+                "question_text": "Tell me about a conflict with a teammate and how you resolved it.",
+                "followup_questions": [
+                    "What would you handle differently now?",
+                    "How did you prevent recurring conflict?",
+                ],
+            },
+            {
+                "topic_tag": "culture_fit",
+                "question_text": "What kind of team culture helps you do your best work, and why?",
+                "followup_questions": [
+                    "How do you adapt when culture differs from preference?",
+                    "Give one example from past internships or projects.",
+                ],
+            },
         ],
     }
 
 
-def _generate_question(agent_type: str, role: str, company: str, difficulty: str) -> Dict[str, Any]:
+def _generate_question(
+    agent_type: str,
+    role: str,
+    company: str,
+    difficulty: str,
+    asked_topics: List[str],
+) -> Dict[str, Any]:
     if agent_type == "code":
-        return _generate_code_question(role, company, difficulty)
+        base = _generate_code_question(role, company, difficulty)
+        selected = _pick_non_repeated(base["catalog"], asked_topics, "topic_tags")
+        return {
+            "question_id": f"Q_CODE_{uuid.uuid4().hex[:6]}",
+            **{k: v for k, v in base.items() if k != "catalog"},
+            **selected,
+        }
     if agent_type == "resume":
-        return _generate_resume_question()
-    return _generate_hr_question()
+        base = _generate_resume_question()
+        selected = _pick_non_repeated(base["catalog"], asked_topics, "topic_tag")
+        return {
+            "question_id": f"Q_RES_{uuid.uuid4().hex[:6]}",
+            **{k: v for k, v in base.items() if k != "catalog"},
+            **selected,
+        }
+    base = _generate_hr_question()
+    selected = _pick_non_repeated(base["catalog"], asked_topics, "topic_tag")
+    return {
+        "question_id": f"Q_HR_{uuid.uuid4().hex[:6]}",
+        **{k: v for k, v in base.items() if k != "catalog"},
+        **selected,
+    }
 
 
 def _score_from_answer(answer_text: str, max_score: int) -> int:
@@ -278,11 +398,25 @@ def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
         },
         "pending_turn_id": f"T_{1:03d}",
         "latest_question": _generate_question(
-            first_agent, payload["role"], payload["company"], payload["difficulty"]
+            first_agent,
+            payload["role"],
+            payload["company"],
+            payload["difficulty"],
+            [],
         ),
         "locked": False,
         "request_cache": {},
+        "debug_trace": [],
     }
+    _log_event(
+        session,
+        "session_started",
+        {
+            "session_id": session_id,
+            "turn_plan": turn_plan,
+            "first_question": session["latest_question"],
+        },
+    )
     _persist_session(session)
     return session
 
@@ -312,8 +446,30 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             session["interview_config"]["role"],
             session["interview_config"]["company"],
             session["interview_config"]["difficulty"],
+            session["coverage_context"]["already_asked_topics"],
+        )
+        _log_event(
+            session,
+            "answer_received",
+            {
+                "agent_type": agent_type,
+                "turn_id": session["pending_turn_id"],
+                "question_id": question_pack["question_id"],
+                "request_id": request_id,
+                "answer_preview": answer_payload["answer_text"][:120],
+            },
         )
         evaluation = _evaluate_answer(agent_type, answer_payload["answer_text"], question_pack)
+        _log_event(
+            session,
+            "evaluation_completed",
+            {
+                "question_id": question_pack["question_id"],
+                "agent_type": agent_type,
+                "evaluation": evaluation,
+                "followups": question_pack.get("followup_questions", []),
+            },
+        )
         turn = {
             "turn_id": session["pending_turn_id"],
             "agent_type": agent_type,
@@ -325,9 +481,11 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             "completed_at": _now_iso(),
         }
         session["turns"].append(turn)
-        session["coverage_context"]["already_asked_topics"].append(
-            question_pack.get("topic_tag") or ",".join(question_pack.get("topic_tags", []))
-        )
+        primary_topic = question_pack.get("topic_tag")
+        if not primary_topic:
+            tags = question_pack.get("topic_tags", [])
+            primary_topic = tags[0] if tags else ""
+        session["coverage_context"]["already_asked_topics"].append(primary_topic)
 
         if evaluation["topics_demonstrated_weak"]:
             session["coverage_context"]["weakness_tags"].extend(
@@ -345,6 +503,11 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             session["pending_turn_id"] = None
             if request_id:
                 session["request_cache"][request_id] = turn["turn_id"]
+            _log_event(
+                session,
+                "session_completed",
+                {"final_scores": session["final_scores"], "total_turns": len(session["turns"])},
+            )
             _persist_session(session)
             return session
 
@@ -356,6 +519,16 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             session["interview_config"]["role"],
             session["interview_config"]["company"],
             session["interview_config"]["difficulty"],
+            session["coverage_context"]["already_asked_topics"],
+        )
+        _log_event(
+            session,
+            "next_question_generated",
+            {
+                "next_agent": session["current_agent"],
+                "next_turn_id": session["pending_turn_id"],
+                "question": session["latest_question"],
+            },
         )
         if request_id:
             session["request_cache"][request_id] = turn["turn_id"]
@@ -373,5 +546,10 @@ def end_session(session_id: str, reason: str) -> Dict[str, Any]:
     if session["status"] != "completed":
         session["status"] = "aborted" if reason in {"aborted", "manual_end"} else "completed"
         session["final_scores"] = _compute_final_scores(session)
+        _log_event(
+            session,
+            "session_ended",
+            {"reason": reason, "status": session["status"], "final_scores": session["final_scores"]},
+        )
         _persist_session(session)
     return session
