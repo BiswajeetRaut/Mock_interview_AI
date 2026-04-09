@@ -5,6 +5,10 @@ import json
 import os
 import uuid
 from typing import Any, Dict, List, Optional
+from agents.manegerial.node import generate_hr_question
+from agents.resume_based.node import generate_resume_question
+from agents.supervisor.node import plan_session_next_step
+from agents.technical_coding.node import generate_coding_question
 
 try:
     from redis import Redis
@@ -19,6 +23,26 @@ REDIS_URL = os.getenv("REDIS_URL", "").strip()
 _REDIS_CLIENT = Redis.from_url(REDIS_URL, decode_responses=True) if Redis and REDIS_URL else None
 
 AGENT_ORDER: List[str] = ["code", "resume", "hr"]
+ROUND_LABELS = {
+    "code": "technical problem-solving",
+    "resume": "your past experience",
+    "hr": "behavioral and collaboration topics",
+}
+ROUND_TYPE_LABELS = {
+    "tech-dsa": "data structures and algorithms",
+    "system-design": "system design",
+    "managerial": "behavioral and managerial discussion",
+    "resume-based": "your past experience",
+}
+ROUND_TYPE_TO_AGENT = {
+    "tech-dsa": "code",
+    "system-design": "code",
+    "managerial": "hr",
+    "resume-based": "resume",
+}
+ROUND_TYPE_ALIASES = {
+    "tech-resume": "resume-based",
+}
 
 
 def _now_iso() -> str:
@@ -84,6 +108,79 @@ def _pick_non_repeated(pool: List[Dict[str, Any]], asked_topics: List[str], topi
     return pool[len(asked_topics) % len(pool)]
 
 
+def _pick_preferred_item(
+    pool: List[Dict[str, Any]],
+    asked_topics: List[str],
+    topic_key: str,
+    preferred_topics: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    preferred = [topic.lower() for topic in (preferred_topics or [])]
+    if preferred:
+        for item in pool:
+            topic_value = item.get(topic_key)
+            topic_values = topic_value if isinstance(topic_value, list) else [topic_value]
+            normalized_values = [str(value).lower() for value in topic_values if value]
+            question_text = str(item.get("question_text", "")).lower()
+            if any(
+                pref in question_text
+                or any(pref in value or value in pref for value in normalized_values)
+                for pref in preferred
+            ):
+                return item
+    return _pick_non_repeated(pool, asked_topics, topic_key)
+
+
+def _normalize_round_type(round_type: str) -> str:
+    return ROUND_TYPE_ALIASES.get(round_type, round_type)
+
+
+def _normalize_topics_map(topics: Dict[str, Any]) -> Dict[str, List[str]]:
+    normalized: Dict[str, List[str]] = {}
+    for round_type, values in (topics or {}).items():
+        normalized_round_type = _normalize_round_type(round_type)
+        if isinstance(values, list):
+            normalized[normalized_round_type] = [str(value) for value in values if str(value).strip()]
+        else:
+            normalized[normalized_round_type] = []
+    return normalized
+
+
+def _build_round_sequence(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    selected_types = [
+        _normalize_round_type(round_type)
+        for round_type in payload.get("selected_types", [])
+        if _normalize_round_type(round_type) in ROUND_TYPE_TO_AGENT
+    ]
+    topics_map = _normalize_topics_map(payload.get("topics", {}))
+
+    if not selected_types:
+        selected_types = [round_type for round_type in topics_map.keys() if round_type in ROUND_TYPE_TO_AGENT]
+
+    if not selected_types:
+        distribution = payload.get("turn_distribution", {})
+        for agent_type in AGENT_ORDER:
+            if int(distribution.get(agent_type, 0)) <= 0:
+                continue
+            default_round_type = {
+                "code": "tech-dsa",
+                "resume": "resume-based",
+                "hr": "managerial",
+            }[agent_type]
+            selected_types.append(default_round_type)
+
+    if not selected_types:
+        selected_types = ["tech-dsa"]
+
+    return [
+        {
+            "round_type": round_type,
+            "agent_type": ROUND_TYPE_TO_AGENT[round_type],
+            "topics": topics_map.get(round_type, []),
+        }
+        for round_type in selected_types
+    ]
+
+
 def _build_turn_plan(turn_distribution: Dict[str, int], total_turns: int) -> List[str]:
     remaining = {
         "code": max(0, int(turn_distribution.get("code", 0))),
@@ -100,6 +197,33 @@ def _build_turn_plan(turn_distribution: Dict[str, int], total_turns: int) -> Lis
     while len(plan) < total_turns:
         plan.append(AGENT_ORDER[len(plan) % len(AGENT_ORDER)])
     return plan
+
+
+def _expand_round_sequence(round_sequence: List[Dict[str, Any]], total_turns: int) -> List[Dict[str, Any]]:
+    if not round_sequence:
+        round_sequence = [{"round_type": "tech-dsa", "agent_type": "code", "topics": []}]
+
+    expanded: List[Dict[str, Any]] = []
+    idx = 0
+    while len(expanded) < total_turns:
+        spec = round_sequence[idx % len(round_sequence)]
+        expanded.append(
+            {
+                "round_type": spec["round_type"],
+                "agent_type": spec["agent_type"],
+                "topics": list(spec.get("topics", [])),
+            }
+        )
+        idx += 1
+    return expanded
+
+
+def _turn_spec(session: Dict[str, Any], turn_counter: int) -> Dict[str, Any]:
+    turn_plan = session.get("turn_plan", [])
+    if not turn_plan:
+        return {"round_type": "tech-dsa", "agent_type": "code", "topics": []}
+    index = max(0, min(turn_counter - 1, len(turn_plan) - 1))
+    return turn_plan[index]
 
 
 def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[str, Any]:
@@ -251,30 +375,292 @@ def _generate_question(
     company: str,
     difficulty: str,
     asked_topics: List[str],
+    preferred_topics: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     if agent_type == "code":
         base = _generate_code_question(role, company, difficulty)
-        selected = _pick_non_repeated(base["catalog"], asked_topics, "topic_tags")
+        selected = _pick_preferred_item(base["catalog"], asked_topics, "topic_tags", preferred_topics)
         return {
             "question_id": f"Q_CODE_{uuid.uuid4().hex[:6]}",
+            "core_question_text": selected["question_text"],
             **{k: v for k, v in base.items() if k != "catalog"},
             **selected,
         }
     if agent_type == "resume":
         base = _generate_resume_question()
-        selected = _pick_non_repeated(base["catalog"], asked_topics, "topic_tag")
+        selected = _pick_preferred_item(base["catalog"], asked_topics, "topic_tag", preferred_topics)
         return {
             "question_id": f"Q_RES_{uuid.uuid4().hex[:6]}",
+            "core_question_text": selected["question_text"],
             **{k: v for k, v in base.items() if k != "catalog"},
             **selected,
         }
     base = _generate_hr_question()
-    selected = _pick_non_repeated(base["catalog"], asked_topics, "topic_tag")
+    selected = _pick_preferred_item(base["catalog"], asked_topics, "topic_tag", preferred_topics)
     return {
         "question_id": f"Q_HR_{uuid.uuid4().hex[:6]}",
+        "core_question_text": selected["question_text"],
         **{k: v for k, v in base.items() if k != "catalog"},
         **selected,
     }
+
+
+def _generate_system_design_question(role: str, company: str, preferred_topics: Optional[List[str]] = None) -> Dict[str, Any]:
+    topic_hint = preferred_topics[0] if preferred_topics else "scalable notification delivery"
+    return {
+        "question_id": f"Q_SYS_{uuid.uuid4().hex[:6]}",
+        "agent_type": "code",
+        "round_type": "system-design",
+        "difficulty": "medium",
+        "topic_tags": [topic_hint.lower().replace(" ", "_"), "system_design"],
+        "question_text": f"Design a {topic_hint} system for a {role} interview at {company}. Walk through requirements, APIs, data model, scaling bottlenecks, caching, and trade-offs.",
+        "core_question_text": f"Design a {topic_hint} system for a {role} interview at {company}. Walk through requirements, APIs, data model, scaling bottlenecks, caching, and trade-offs.",
+        "input_output_format": {"input": "product requirements and traffic assumptions", "output": "high-level and detailed system design"},
+        "constraints": ["Discuss scale assumptions", "Cover trade-offs", "Address bottlenecks and failure modes"],
+        "rubric": {
+            "dimensions": [
+                {"key": "requirements_clarity", "max_score": 5},
+                {"key": "architecture_quality", "max_score": 5},
+                {"key": "scaling_tradeoffs", "max_score": 5},
+                {"key": "communication", "max_score": 5},
+            ],
+            "max_total": 20,
+        },
+        "followup_questions": [
+            "What would become the first bottleneck as traffic grows 10x?",
+            "How would you change the design for stronger consistency guarantees?",
+        ],
+    }
+
+
+def _resume_summary(session: Dict[str, Any]) -> str:
+    parsed_resume = session.get("candidate", {}).get("resume_parsed", {})
+    skills = ", ".join(parsed_resume.get("skills", [])[:6]) or "No explicit skills listed"
+    return f"Skills: {skills}. Experience years: {parsed_resume.get('experience_years', 0)}."
+
+
+def _generate_question_from_agent(
+    session: Dict[str, Any],
+    agent_type: Optional[str] = None,
+    round_spec: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    round_spec = round_spec or _turn_spec(session, session.get("turn_counter", 1))
+    agent_type = agent_type or round_spec.get("agent_type", "code")
+    round_type = round_spec.get("round_type", "tech-dsa")
+    selected_topics = round_spec.get("topics", [])
+    coverage = session.get("coverage_context", {})
+    role = session["interview_config"]["role"]
+    company = session["interview_config"]["company"]
+    experience = session["interview_config"].get("experience", 0)
+    job_description = session["interview_config"].get("jd", "")
+    difficulty = session["interview_config"]["difficulty"]
+
+    try:
+        if agent_type == "code":
+            question_pack = generate_coding_question({
+                "request_id": f"REQ_{uuid.uuid4().hex[:8]}",
+                "session_id": session["session_id"],
+                "turn_id": session.get("pending_turn_id"),
+                "task": "generate_coding_question",
+                "company": company,
+                "role": role,
+                "experience": experience,
+                "job_description": job_description,
+                "difficulty": difficulty,
+                "round_type": round_type,
+                "language_preference": session["interview_config"].get("language_preference", "python"),
+                "coverage_context": coverage,
+                "constraints": {
+                    "question_type": "system_design" if round_type == "system-design" else "dsa",
+                    "must_include_followups": True,
+                    "max_time_minutes": 25,
+                    "needs_test_cases": True,
+                    "should_be_interview_realistic": True,
+                    "selected_topics": selected_topics,
+                },
+            })
+        elif agent_type == "resume":
+            question_pack = generate_resume_question({
+                "company": company,
+                "role": role,
+                "experience": experience,
+                "coverage_context": coverage,
+                "resume_summary": _resume_summary(session),
+                "job_description": job_description,
+                "preferred_topics": selected_topics,
+            })
+        else:
+            question_pack = generate_hr_question({
+                "company": company,
+                "role": role,
+                "experience": experience,
+                "coverage_context": coverage,
+                "job_description": job_description,
+                "preferred_topics": selected_topics,
+            })
+
+        if question_pack:
+            question_pack.setdefault("agent_type", agent_type)
+            question_pack.setdefault("round_type", round_type)
+            question_pack.setdefault("selected_topics", selected_topics)
+            question_pack.setdefault("core_question_text", question_pack.get("question_text", ""))
+            question_pack.setdefault("followup_questions", [])
+            return question_pack
+    except Exception:
+        pass
+
+    if agent_type == "code" and round_type == "system-design":
+        return _generate_system_design_question(role, company, selected_topics)
+
+    return _generate_question(
+        agent_type,
+        role,
+        company,
+        difficulty,
+        coverage.get("already_asked_topics", []),
+        preferred_topics=selected_topics,
+    )
+
+
+def _round_label(agent_type: str) -> str:
+    return ROUND_LABELS.get(agent_type, "the interview")
+
+
+def _round_type_label(round_type: str, agent_type: str) -> str:
+    return ROUND_TYPE_LABELS.get(round_type, _round_label(agent_type))
+
+
+def _candidate_first_name(session: Dict[str, Any]) -> str:
+    name = (session.get("candidate", {}).get("name") or "there").strip()
+    return name.split()[0] if name else "there"
+
+
+def _candidate_signaled_stuck(answer_text: str) -> bool:
+    normalized = " ".join((answer_text or "").lower().split())
+    if not normalized:
+        return True
+
+    stuck_phrases = [
+        "i don't know",
+        "i dont know",
+        "do not know",
+        "not sure",
+        "no idea",
+        "i have no idea",
+        "i'm not sure",
+        "im not sure",
+        "can't remember",
+        "cannot remember",
+        "don't remember",
+        "do not remember",
+        "blanking",
+        "skip this",
+        "pass on this",
+        "move on",
+    ]
+    return any(phrase in normalized for phrase in stuck_phrases)
+
+
+def _decorate_question_text(
+    session: Dict[str, Any],
+    question_pack: Dict[str, Any],
+    intro_style: str,
+    supervisor_decision: Optional[Dict[str, Any]] = None,
+    previous_agent: Optional[str] = None,
+    evaluation: Optional[Dict[str, Any]] = None,
+    answer_text: str = "",
+) -> Dict[str, Any]:
+    core_question = question_pack.get("core_question_text") or question_pack.get("question_text", "")
+    agent_type = question_pack.get("agent_type", session.get("current_agent", "code"))
+    round_type = question_pack.get("round_type", session.get("current_round_type", "tech-dsa"))
+    candidate_first_name = _candidate_first_name(session)
+    company = session.get("interview_config", {}).get("company", "the company")
+    role = session.get("interview_config", {}).get("role", "this role")
+    transition_target = _round_type_label(round_type, agent_type)
+
+    if intro_style == "opening":
+        prefix = (
+            f"Hi {candidate_first_name}, thanks for joining today. "
+            f"I'd like to keep this conversational and aligned to a {role} interview at {company}. "
+            f"let's begin with {transition_target}. "
+        )
+    elif supervisor_decision:
+        acknowledgement = (supervisor_decision.get("acknowledgement") or "").strip()
+        transition = (supervisor_decision.get("transition") or "").strip()
+        prefix = " ".join(part for part in [acknowledgement, transition] if part).strip()
+        if prefix:
+            prefix = f"{prefix} "
+    else:
+        word_count = len(answer_text.split())
+        score_pct = (evaluation or {}).get("percentage", 0)
+        if word_count < 20:
+            acknowledgement = "Thanks. I want to hear a bit more depth from you. "
+        elif score_pct >= 85:
+            acknowledgement = "Nice, that was a strong explanation. "
+        elif score_pct >= 65:
+            acknowledgement = "Thanks, that was helpful. "
+        else:
+            acknowledgement = "I see the direction you were taking. "
+
+        if previous_agent and previous_agent != agent_type:
+            transition = f"Let's switch gears a bit and move into {transition_target}. "
+        else:
+            transition = f"Let's stay with {transition_target} for the next one. "
+        prefix = acknowledgement + transition
+
+    decorated = dict(question_pack)
+    decorated["question_text"] = f"{prefix}{core_question}".strip()
+    return decorated
+
+
+def _should_ask_followup(
+    question_pack: Dict[str, Any],
+    answer_text: str,
+    evaluation: Dict[str, Any],
+) -> bool:
+    if _candidate_signaled_stuck(answer_text):
+        return False
+    if question_pack.get("is_followup"):
+        return False
+    followups = question_pack.get("followup_questions", [])
+    if not followups:
+        return False
+
+    word_count = len(answer_text.split())
+    score_pct = evaluation.get("percentage", 0)
+    weak_signals = evaluation.get("topics_demonstrated_weak", [])
+    return word_count < 35 or score_pct < 65 or bool(weak_signals)
+
+
+def _build_followup_question(
+    session: Dict[str, Any],
+    previous_question_pack: Dict[str, Any],
+    evaluation: Dict[str, Any],
+    answer_text: str,
+    supervisor_decision: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    followup_questions = previous_question_pack.get("followup_questions", [])
+    followup_text = followup_questions[0] if followup_questions else previous_question_pack.get("core_question_text", "")
+    if len(answer_text.split()) < 20:
+        followup_text = f"Can you make that more concrete? {followup_text}"
+
+    followup_pack = dict(previous_question_pack)
+    followup_pack["question_id"] = f"Q_FUP_{uuid.uuid4().hex[:6]}"
+    followup_pack["core_question_text"] = followup_text
+    followup_pack["question_text"] = followup_text
+    followup_pack["is_followup"] = True
+    followup_pack["parent_question_id"] = previous_question_pack.get("question_id")
+    followup_pack["followup_questions"] = followup_questions[1:]
+
+    return _decorate_question_text(
+        session,
+        followup_pack,
+        intro_style="followup",
+        supervisor_decision=supervisor_decision,
+        previous_agent=previous_question_pack.get("agent_type"),
+        evaluation=evaluation,
+        answer_text=answer_text,
+    )
 
 
 def _score_from_answer(answer_text: str, max_score: int) -> int:
@@ -350,10 +736,33 @@ def _compute_final_scores(session: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _next_agent(session: Dict[str, Any], next_turn_counter: int) -> str:
-    turn_plan = session.get("turn_plan", AGENT_ORDER)
-    if 1 <= next_turn_counter <= len(turn_plan):
-        return turn_plan[next_turn_counter - 1]
-    return AGENT_ORDER[(next_turn_counter - 1) % len(AGENT_ORDER)]
+    return _turn_spec(session, next_turn_counter).get("agent_type", "code")
+
+
+def _resolve_next_turn_spec(
+    session: Dict[str, Any],
+    next_turn_counter: int,
+    requested_agent: Optional[str] = None,
+) -> Dict[str, Any]:
+    planned_spec = _turn_spec(session, next_turn_counter)
+    if not requested_agent or planned_spec.get("agent_type") == requested_agent:
+        return planned_spec
+
+    for spec in session.get("turn_plan", [])[max(0, next_turn_counter - 1):]:
+        if spec.get("agent_type") == requested_agent:
+            return spec
+
+    round_type = {
+        "code": "tech-dsa",
+        "resume": "resume-based",
+        "hr": "managerial",
+    }.get(requested_agent, "tech-dsa")
+    preferred_topics = session.get("interview_config", {}).get("topics", {}).get(round_type, [])
+    return {
+        "round_type": round_type,
+        "agent_type": requested_agent or "code",
+        "topics": preferred_topics,
+    }
 
 
 def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -361,8 +770,10 @@ def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
     parsed_resume = _parse_resume_text(payload["resume_content"]["data"])
     created_at = _now_iso()
 
-    turn_plan = _build_turn_plan(payload["turn_distribution"], payload["total_turns_planned"])
-    first_agent = turn_plan[0] if turn_plan else "code"
+    round_sequence = _build_round_sequence(payload)
+    turn_plan = _expand_round_sequence(round_sequence, payload["total_turns_planned"])
+    first_turn_spec = turn_plan[0] if turn_plan else {"round_type": "tech-dsa", "agent_type": "code", "topics": []}
+    first_agent = first_turn_spec["agent_type"]
     session = {
         "session_id": session_id,
         "created_at": created_at,
@@ -371,18 +782,26 @@ def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
             "user_id": payload["user_id"],
             "name": payload["candidate_name"],
             "resume_parsed": parsed_resume,
+            "resume": payload.get("resume"),
         },
         "interview_config": {
             "company": payload["company"],
             "role": payload["role"],
+            "experience": payload.get("experience", 0),
+            "jd": payload.get("jd"),
             "difficulty": payload["difficulty"],
             "language_preference": payload["language_preference"],
             "total_turns_planned": payload["total_turns_planned"],
             "turn_distribution": payload["turn_distribution"],
+            "selected_types": payload.get("selected_types", []),
+            "topics": _normalize_topics_map(payload.get("topics", {})),
         },
+        "round_sequence": round_sequence,
         "turn_plan": turn_plan,
         "turn_counter": 1,
         "current_agent": first_agent,
+        "current_round_type": first_turn_spec["round_type"],
+        "current_turn_spec": first_turn_spec,
         "coverage_context": {
             "already_asked_topics": [],
             "avoid_topics": [],
@@ -397,17 +816,16 @@ def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
             "overall": None,
         },
         "pending_turn_id": f"T_{1:03d}",
-        "latest_question": _generate_question(
-            first_agent,
-            payload["role"],
-            payload["company"],
-            payload["difficulty"],
-            [],
-        ),
+        "latest_question": None,
         "locked": False,
         "request_cache": {},
         "debug_trace": [],
     }
+    session["latest_question"] = _decorate_question_text(
+        session,
+        _generate_question_from_agent(session, first_agent, first_turn_spec),
+        intro_style="opening",
+    )
     _log_event(
         session,
         "session_started",
@@ -440,14 +858,9 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
 
     session["locked"] = True
     try:
-        agent_type = session["current_agent"]
-        question_pack = session["latest_question"] or _generate_question(
-            agent_type,
-            session["interview_config"]["role"],
-            session["interview_config"]["company"],
-            session["interview_config"]["difficulty"],
-            session["coverage_context"]["already_asked_topics"],
-        )
+        current_turn_spec = session.get("current_turn_spec") or _turn_spec(session, session.get("turn_counter", 1))
+        agent_type = current_turn_spec.get("agent_type", session["current_agent"])
+        question_pack = session["latest_question"] or _generate_question_from_agent(session, agent_type, current_turn_spec)
         _log_event(
             session,
             "answer_received",
@@ -473,6 +886,7 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
         turn = {
             "turn_id": session["pending_turn_id"],
             "agent_type": agent_type,
+            "round_type": current_turn_spec.get("round_type"),
             "question_id": question_pack["question_id"],
             "question_text": question_pack["question_text"],
             "question_pack": question_pack,
@@ -511,22 +925,109 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             _persist_session(session)
             return session
 
-        session["turn_counter"] += 1
-        session["current_agent"] = _next_agent(session, session["turn_counter"])
-        session["pending_turn_id"] = f"T_{session['turn_counter']:03d}"
-        session["latest_question"] = _generate_question(
-            session["current_agent"],
-            session["interview_config"]["role"],
-            session["interview_config"]["company"],
-            session["interview_config"]["difficulty"],
-            session["coverage_context"]["already_asked_topics"],
+        supervisor_decision = plan_session_next_step(session, turn, evaluation)
+        if _candidate_signaled_stuck(answer_payload["answer_text"]) and supervisor_decision["action"] == "follow_up":
+            fallback_next_agent = _next_agent(session, session["turn_counter"] + 1)
+            supervisor_decision = {
+                "action": "ask_question" if fallback_next_agent == agent_type else "switch_round",
+                "next_agent": fallback_next_agent,
+                "focus": "move_on",
+                "acknowledgement": "That's okay.",
+                "transition": (
+                    "Let's leave that one and try a different question."
+                    if fallback_next_agent == agent_type
+                    else f"Let's move on and switch into {_round_label(fallback_next_agent)}."
+                ),
+                "reason": "Session safeguard prevented repeated follow-up after candidate said they were stuck.",
+            }
+        elif supervisor_decision["action"] == "follow_up" and not _should_ask_followup(
+            question_pack,
+            answer_payload["answer_text"],
+            evaluation,
+        ):
+            fallback_next_agent = _next_agent(session, session["turn_counter"] + 1)
+            supervisor_decision = {
+                "action": "ask_question" if fallback_next_agent == agent_type else "switch_round",
+                "next_agent": fallback_next_agent,
+                "focus": "coverage",
+                "acknowledgement": "Thanks, that helps.",
+                "transition": (
+                    "Let's take a fresh question in this area."
+                    if fallback_next_agent == agent_type
+                    else f"Let's switch gears and move into {_round_label(fallback_next_agent)}."
+                ),
+                "reason": "Session safeguard prevented repeated follow-up chaining on the same question thread.",
+            }
+        session.setdefault("supervisor_history", []).append(
+            {
+                "turn_id": turn["turn_id"],
+                "decision": supervisor_decision,
+                "timestamp": _now_iso(),
+            }
         )
+
+        if supervisor_decision["action"] == "end_interview":
+            session["status"] = "completed"
+            session["final_scores"] = _compute_final_scores(session)
+            session["latest_question"] = None
+            session["pending_turn_id"] = None
+            if request_id:
+                session["request_cache"][request_id] = turn["turn_id"]
+            _log_event(
+                session,
+                "session_completed",
+                {
+                    "final_scores": session["final_scores"],
+                    "total_turns": len(session["turns"]),
+                    "reason": supervisor_decision.get("reason"),
+                },
+            )
+            _persist_session(session)
+            return session
+
+        session["turn_counter"] += 1
+        session["pending_turn_id"] = f"T_{session['turn_counter']:03d}"
+
+        if supervisor_decision["action"] == "follow_up":
+            session["current_agent"] = agent_type
+            session["current_round_type"] = current_turn_spec.get("round_type", session.get("current_round_type"))
+            session["current_turn_spec"] = {
+                "round_type": current_turn_spec.get("round_type", session.get("current_round_type", "tech-dsa")),
+                "agent_type": agent_type,
+                "topics": list(current_turn_spec.get("topics", [])),
+            }
+            session["latest_question"] = _build_followup_question(
+                session,
+                question_pack,
+                evaluation,
+                answer_payload["answer_text"],
+                supervisor_decision=supervisor_decision,
+            )
+        else:
+            next_turn_spec = _resolve_next_turn_spec(
+                session,
+                session["turn_counter"],
+                supervisor_decision.get("next_agent"),
+            )
+            session["current_agent"] = next_turn_spec["agent_type"]
+            session["current_round_type"] = next_turn_spec["round_type"]
+            session["current_turn_spec"] = next_turn_spec
+            session["latest_question"] = _decorate_question_text(
+                session,
+                _generate_question_from_agent(session, session["current_agent"], next_turn_spec),
+                intro_style="transition",
+                supervisor_decision=supervisor_decision,
+                previous_agent=agent_type,
+                evaluation=evaluation,
+                answer_text=answer_payload["answer_text"],
+            )
         _log_event(
             session,
             "next_question_generated",
             {
                 "next_agent": session["current_agent"],
                 "next_turn_id": session["pending_turn_id"],
+                "supervisor_decision": supervisor_decision,
                 "question": session["latest_question"],
             },
         )

@@ -11,7 +11,10 @@ class CodeAgentState(TypedDict, total=False):
 
     company: str
     role: str
+    experience: int
+    job_description: str
     difficulty: str
+    round_type: str
     language_preference: str
 
     coverage_context: Dict[str, Any]

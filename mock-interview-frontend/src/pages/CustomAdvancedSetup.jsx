@@ -19,6 +19,7 @@ import {
     MANAGERIAL_TOPICS
 } from "../data/topics";
 import { startSession } from "../api/session.api";
+import { buildSessionStartPayload } from "../utils/sessionPayload";
 
 const INTERVIEW_TYPES = [
     {
@@ -89,26 +90,22 @@ export default function CustomAdvancedSetup() {
     };
 
     const handleStart = async () => {
-        const resumeData = typeof resume === "string"
-            ? resume
-            : resume?.name
-                ? `Uploaded resume file: ${resume.name}`
-                : "";
+        const selectedTopics = selectedTypes.reduce((acc, typeId) => {
+            acc[typeId] = topicsMap[typeId] || [];
+            return acc;
+        }, {});
 
-        const session = await startSession({
-            user_id: "anonymous",
-            candidate_name: "Candidate",
+        const payload = await buildSessionStartPayload({
             company,
             role,
-            difficulty: "medium",
-            language_preference: "python",
-            total_turns_planned: 8,
-            turn_distribution: { code: 3, resume: 3, hr: 2 },
-            resume_content: {
-                format: "text",
-                data: resumeData || jd || "",
-            },
+            experience,
+            jd,
+            resume,
+            selectedTypes,
+            topics: selectedTopics,
         });
+
+        const session = await startSession(payload);
 
         navigate(`/interview/${session.session_id}`, {
             state: {
