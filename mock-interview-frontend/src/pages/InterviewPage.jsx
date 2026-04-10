@@ -34,6 +34,7 @@ import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 import Speech from "speak-tts";
+import { executeCode } from "../api/coding.api";
 
 const MotionBox = motion(Box);
 
@@ -54,6 +55,10 @@ export default function InterviewPage() {
   const textareaRef = useRef(null);
 
   const [code, setCode] = useState("// Start coding here...\n");
+  const [language, setLanguage] = useState("python");
+  const [runResult, setRunResult] = useState(null);
+  const [isRunningCode, setIsRunningCode] = useState(false);
+  const [isSubmittingCode, setIsSubmittingCode] = useState(false);
   const [answerDraft, setAnswerDraft] = useState("");
   const {
     transcript: speechTranscript,
@@ -237,10 +242,73 @@ export default function InterviewPage() {
   };
 
   const canSend = !!(answerDraft.trim() || finalTranscript.trim());
+  const isCodingQuestion = sessionState?.latest_question?.agent_type === "code";
   const latestAIQuestion =
     sessionState?.latest_question?.question_text ||
     [...transcriptEntries].reverse().find((entry) => entry.speaker === "AI")?.text ||
     "Welcome! I'm your AI interviewer.";
+  const codingQuestionPack = sessionState?.latest_question || null;
+
+  useEffect(() => {
+    if (isCodingQuestion) setShowCode(true);
+  }, [isCodingQuestion]);
+
+  useEffect(() => {
+    setRunResult(null);
+  }, [sessionState?.latest_question?.question_id]);
+
+  const testCases = codingQuestionPack?.test_cases || [];
+
+  const handleRunCode = async () => {
+    if (!testCases.length) {
+      alert("No test cases available for this question.");
+      return;
+    }
+    setIsRunningCode(true);
+    try {
+      const result = await executeCode({ code, language, test_cases: testCases });
+      setRunResult(result);
+    } catch (error) {
+      console.error(error);
+      alert(error?.response?.data?.detail || "Failed to run code.");
+    } finally {
+      setIsRunningCode(false);
+    }
+  };
+
+  const handleSubmitCode = async () => {
+    if (!id || !isCodingQuestion) return;
+    setIsSubmittingCode(true);
+    try {
+      const result = runResult || (await executeCode({ code, language, test_cases: testCases }));
+      setRunResult(result);
+      const summary = result.all_passed
+        ? `All ${result.total} test cases passed.`
+        : `${result.passed}/${result.total} test cases passed.`;
+      const requestId = globalThis.crypto?.randomUUID?.() || `REQ_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const updatedSession = await submitSessionAnswer(
+        id,
+        `Code submission summary: ${summary}`,
+        requestId,
+        code,
+        language,
+      );
+      setSessionState(updatedSession);
+      const nextQuestion = updatedSession.latest_question?.question_text;
+      const aiReplyText = nextQuestion || "Code submitted. Let's continue.";
+      setTranscriptEntries((prev) => [
+        ...prev,
+        { speaker: "YOU", text: `Submitted code. ${summary}`, time: timestamp() },
+        { speaker: "AI", text: aiReplyText, time: timestamp() },
+      ]);
+      setAnswerDraft("");
+    } catch (error) {
+      console.error(error);
+      alert(error?.response?.data?.detail || "Failed to submit code.");
+    } finally {
+      setIsSubmittingCode(false);
+    }
+  };
 
   return (
     <>
@@ -394,6 +462,14 @@ export default function InterviewPage() {
             <CodingPlayground
               code={code}
               setCode={setCode}
+              language={language}
+              setLanguage={setLanguage}
+              questionPack={codingQuestionPack}
+              onRunCode={handleRunCode}
+              runResult={runResult}
+              isRunning={isRunningCode}
+              onSubmitCode={handleSubmitCode}
+              isSubmittingCode={isSubmittingCode}
               isOpen={showCode}
               flexGrow={1}
               flexBasis={{ base: "100%", md: "74%" }}

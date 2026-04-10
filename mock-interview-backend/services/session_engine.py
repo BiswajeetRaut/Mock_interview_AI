@@ -365,6 +365,17 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             {
                 "topic_tags": ["arrays", "sliding_window"],
                 "question_text": f"Given an integer array nums, return the minimum length subarray with sum >= target for a {role} interview at {company}.",
+                "examples": [
+                    {
+                        "input": {"nums": [2, 3, 1, 2, 4, 3], "target": 7},
+                        "output": "2",
+                        "explanation": "Subarray [4,3] has the minimum length 2 with sum >= 7.",
+                    }
+                ],
+                "test_cases": [
+                    {"input": {"nums": [2, 3, 1, 2, 4, 3], "target": 7}, "expected_output": "2"},
+                    {"input": {"nums": [1, 1, 1, 1, 1], "target": 11}, "expected_output": "0"},
+                ],
                 "expected_solution_outline": ["sliding window", "expand right", "shrink left when sum >= target"],
                 "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)"},
                 "followup_questions": [
@@ -375,6 +386,17 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             {
                 "topic_tags": ["hashmap", "prefix_sum"],
                 "question_text": f"Find if a subarray with sum k exists in nums using an approach expected at {company}.",
+                "examples": [
+                    {
+                        "input": {"nums": [1, 2, 3], "k": 5},
+                        "output": "true",
+                        "explanation": "Subarray [2,3] sums to 5.",
+                    }
+                ],
+                "test_cases": [
+                    {"input": {"nums": [1, 2, 3], "k": 5}, "expected_output": "true"},
+                    {"input": {"nums": [1, 2, 3], "k": 7}, "expected_output": "false"},
+                ],
                 "expected_solution_outline": ["prefix sum", "hashmap lookup"],
                 "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(n)"},
                 "followup_questions": [
@@ -385,6 +407,17 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             {
                 "topic_tags": ["two_pointers", "strings"],
                 "question_text": f"Given a string, find the longest substring without repeating characters and explain trade-offs.",
+                "examples": [
+                    {
+                        "input": {"s": "abcabcbb"},
+                        "output": "3",
+                        "explanation": "Longest substring without repeating chars is 'abc', length 3.",
+                    }
+                ],
+                "test_cases": [
+                    {"input": {"s": "abcabcbb"}, "expected_output": "3"},
+                    {"input": {"s": "bbbbb"}, "expected_output": "1"},
+                ],
                 "expected_solution_outline": ["two pointers", "character index map"],
                 "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)/O(k)"},
                 "followup_questions": [
@@ -395,6 +428,17 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             {
                 "topic_tags": ["intervals", "sorting"],
                 "question_text": "Merge overlapping intervals and discuss why sorting first is needed.",
+                "examples": [
+                    {
+                        "input": {"intervals": [[1, 3], [2, 6], [8, 10], [15, 18]]},
+                        "output": "[[1,6],[8,10],[15,18]]",
+                        "explanation": "After sorting by start, merge [1,3] and [2,6].",
+                    }
+                ],
+                "test_cases": [
+                    {"input": {"intervals": [[1, 3], [2, 6], [8, 10], [15, 18]]}, "expected_output": "[[1,6],[8,10],[15,18]]"},
+                    {"input": {"intervals": [[1, 4], [4, 5]]}, "expected_output": "[[1,5]]"},
+                ],
                 "expected_solution_outline": ["sort by start", "merge sweep"],
                 "time_space_targets": {"expected_time": "O(n log n)", "expected_space": "O(n)"},
                 "followup_questions": [
@@ -633,6 +677,17 @@ def _generate_question_from_agent(
             question_pack.setdefault("selected_topics", selected_topics)
             question_pack.setdefault("core_question_text", question_pack.get("question_text", ""))
             question_pack.setdefault("followup_questions", [])
+            if agent_type == "code":
+                examples = question_pack.get("examples", []) or []
+                if "test_cases" not in question_pack and examples:
+                    question_pack["test_cases"] = [
+                        {
+                            "input": example.get("input"),
+                            "expected_output": example.get("output"),
+                        }
+                        for example in examples
+                        if example.get("output") is not None
+                    ]
             return question_pack
     except Exception:
         pass

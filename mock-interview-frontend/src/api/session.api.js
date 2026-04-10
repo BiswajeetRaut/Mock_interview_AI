@@ -5,10 +5,18 @@ export const startSession = async (payload) => {
   return res.data;
 };
 
-export const submitSessionAnswer = async (sessionId, answerText, requestId) => {
+export const submitSessionAnswer = async (
+  sessionId,
+  answerText,
+  requestId,
+  codeSubmitted = null,
+  language = null,
+) => {
   const res = await api.post(`/session/${sessionId}/answer`, {
     answer_text: answerText,
     request_id: requestId,
+    code_submitted: codeSubmitted,
+    language,
   });
   return res.data;
 };
