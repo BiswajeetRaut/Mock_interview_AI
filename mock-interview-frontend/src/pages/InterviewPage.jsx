@@ -12,7 +12,6 @@ import {
 } from "@chakra-ui/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  MessageSquare,
   Code as CodeIcon,
   Send,
   Mic,
@@ -23,7 +22,6 @@ import {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import VideoCard from "../components/VideoCard";
-import TranscriptModal from "../components/TranscriptPanel";
 import CodingPlayground from "../components/CodingPlayground";
 import useMicActivity from "../hooks/useMicActivity";
 import {
@@ -48,7 +46,6 @@ export default function InterviewPage() {
   const [sessionState, setSessionState] = useState(sessionFromState || null);
   const speechRef = useRef(null);
   const lastSpokenAITextRef = useRef("");
-  const [showTranscript, setShowTranscript] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [duration, setDuration] = useState(0);
   const [ttsReady, setTtsReady] = useState(false);
@@ -240,15 +237,13 @@ export default function InterviewPage() {
   };
 
   const canSend = !!(answerDraft.trim() || finalTranscript.trim());
+  const latestAIQuestion =
+    sessionState?.latest_question?.question_text ||
+    [...transcriptEntries].reverse().find((entry) => entry.speaker === "AI")?.text ||
+    "Welcome! I'm your AI interviewer.";
 
   return (
     <>
-      <TranscriptModal
-        isOpen={showTranscript}
-        onClose={() => setShowTranscript(false)}
-        transcript={transcriptEntries}
-      />
-
       <Flex
         direction="column"
         h="100vh"
@@ -313,18 +308,6 @@ export default function InterviewPage() {
               transition="all 0.18s"
               onClick={() => setShowCode((v) => !v)}
             />
-            <IconButton
-              aria-label="Open transcript"
-              icon={<MessageSquare size={15} />}
-              size="sm" h="32px" w="32px" minW="32px"
-              bg="whiteAlpha.80"
-              border="1px solid" borderColor="whiteAlpha.100"
-              borderRadius="8px" color="gray.400"
-              _hover={{ bg: "whiteAlpha.200", color: "white" }}
-              transition="all 0.18s"
-              onClick={() => setShowTranscript(true)}
-            />
-
             <Box h="20px" w="1px" bg="whiteAlpha.100" mx={1} />
 
             <Button
@@ -380,8 +363,31 @@ export default function InterviewPage() {
                 speaking={isUserSpeaking}
                 compact={showCode}
               />
-            </Flex>
           </Flex>
+
+          <Box
+            borderRadius="12px"
+            border="1px solid"
+            borderColor="whiteAlpha.200"
+            bg="rgba(255,255,255,0.03)"
+            p={3}
+            maxH={{ base: "180px", md: showCode ? "200px" : "220px" }}
+            overflowY="auto"
+          >
+            <Text fontSize="11px" color="gray.500" textTransform="uppercase" letterSpacing="0.06em" mb={1.5}>
+              Current Question
+            </Text>
+            <Text fontSize="13px" color="gray.200" lineHeight="1.6" mb={3}>
+              {latestAIQuestion}
+            </Text>
+            <Text fontSize="11px" color="gray.500" textTransform="uppercase" letterSpacing="0.06em" mb={1.5}>
+              Live Speech
+            </Text>
+            <Text fontSize="13px" color={listening ? "green.200" : "gray.400"} lineHeight="1.6">
+              {(speechTranscript || answerDraft || "Start recording to see your live transcript here.").trim()}
+            </Text>
+          </Box>
+        </Flex>
 
           {/* RIGHT — Coding Playground */}
           {showCode && (
