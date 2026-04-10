@@ -37,6 +37,19 @@ import Speech from "speak-tts";
 import { executeCode } from "../api/coding.api";
 
 const MotionBox = motion(Box);
+const CODE_TEMPLATES = {
+  python: `def solve(input_data):
+    # input_data will match each test case "input" payload.
+    # Return only the final answer (e.g., int/string/list/dict).
+    return None
+`,
+  javascript: `function solve(inputData) {
+  // inputData will match each test case "input" payload.
+  // Return only the final answer.
+  return null;
+}
+`,
+};
 
 export default function InterviewPage() {
   const { state } = useLocation();
@@ -54,7 +67,7 @@ export default function InterviewPage() {
   const [composerExpanded, setComposerExpanded] = useState(true);
   const textareaRef = useRef(null);
 
-  const [code, setCode] = useState("// Start coding here...\n");
+  const [code, setCode] = useState(CODE_TEMPLATES.python);
   const [language, setLanguage] = useState("python");
   const [runResult, setRunResult] = useState(null);
   const [isRunningCode, setIsRunningCode] = useState(false);
@@ -257,6 +270,17 @@ export default function InterviewPage() {
     setRunResult(null);
   }, [sessionState?.latest_question?.question_id]);
 
+  useEffect(() => {
+    setCode((prevCode) => {
+      const trimmed = (prevCode || "").trim();
+      const isOldTemplate = Object.values(CODE_TEMPLATES).some((template) => template.trim() === trimmed);
+      if (!trimmed || isOldTemplate) {
+        return CODE_TEMPLATES[language] || CODE_TEMPLATES.python;
+      }
+      return prevCode;
+    });
+  }, [language]);
+
   const testCases = codingQuestionPack?.test_cases || [];
 
   const handleRunCode = async () => {
@@ -274,6 +298,10 @@ export default function InterviewPage() {
     } finally {
       setIsRunningCode(false);
     }
+  };
+
+  const handleLoadTemplate = (nextLanguage) => {
+    setCode(CODE_TEMPLATES[nextLanguage] || CODE_TEMPLATES.python);
   };
 
   const handleSubmitCode = async () => {
@@ -470,6 +498,7 @@ export default function InterviewPage() {
               isRunning={isRunningCode}
               onSubmitCode={handleSubmitCode}
               isSubmittingCode={isSubmittingCode}
+              onLoadTemplate={handleLoadTemplate}
               isOpen={showCode}
               flexGrow={1}
               flexBasis={{ base: "100%", md: "74%" }}

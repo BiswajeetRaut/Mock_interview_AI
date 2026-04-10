@@ -23,6 +23,7 @@ export default function CodingPlayground({
   isRunning,
   onSubmitCode,
   isSubmittingCode,
+  onLoadTemplate,
 }) {
   const examples = questionPack?.examples || [];
   const testCases = questionPack?.test_cases || [];
@@ -38,6 +39,7 @@ export default function CodingPlayground({
       borderRadius="2xl"
       border="1px solid rgba(255,255,255,0.12)"
       overflow="hidden"
+      minH={0}
     >
       {/* HEADER */}
       <Flex
@@ -88,14 +90,40 @@ export default function CodingPlayground({
           >
             Submit
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            borderColor="whiteAlpha.400"
+            color="gray.200"
+            onClick={() => onLoadTemplate?.(language)}
+          >
+            Reset Template
+          </Button>
         </HStack>
       </Flex>
 
-      <Flex direction="column" p={4} gap={3} borderBottom="1px solid rgba(255,255,255,0.08)">
+      <Flex
+        direction="column"
+        p={4}
+        gap={3}
+        borderBottom="1px solid rgba(255,255,255,0.08)"
+        maxH="45%"
+        overflowY="auto"
+      >
+        <Box border="1px solid rgba(255,255,255,0.14)" borderRadius="md" p={3} bg="rgba(255,255,255,0.03)">
+          <Text fontSize="xs" color="gray.400" textTransform="uppercase" mb={1}>Solve Function Contract</Text>
+          <Text fontSize="sm" color="gray.200">
+            Implement <b>solve(input_data)</b> in Python or <b>solve(inputData)</b> in JavaScript.
+          </Text>
+          <Text fontSize="xs" color="gray.400" mt={1}>
+            Return the final output directly (string/number/array/object). The runner compares it with expected output.
+          </Text>
+        </Box>
+
         <Text fontSize="md" fontWeight="semibold">Question</Text>
         <Text fontSize="sm" color="gray.200">{questionPack?.question_text || "No coding question yet."}</Text>
         {!!topicTags.length && (
-          <HStack spacing={2} wrap="wrap">
+          <HStack spacing={2} flexWrap="wrap">
             {topicTags.map((tag) => <Badge key={tag} colorScheme="blue">{tag}</Badge>)}
           </HStack>
         )}
@@ -139,7 +167,7 @@ export default function CodingPlayground({
         )}
       </Flex>
 
-      <Box flex="1" minH="260px">
+      <Box flex="1" minH="260px" overflow="hidden">
         <Editor
           height="100%"
           theme="vs-dark"
