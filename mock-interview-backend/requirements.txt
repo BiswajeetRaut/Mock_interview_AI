@@ -8,3 +8,4 @@ pydantic>=2.7.4
 python-dotenv
 firebase-admin
 redis>=5.0.0
+pypdf>=5.1.0

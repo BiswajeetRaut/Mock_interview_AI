@@ -1,14 +1,24 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
+from io import BytesIO
 import json
 import os
+import re
+from urllib.request import Request, urlopen
 import uuid
 from typing import Any, Dict, List, Optional
 from agents.manegerial.node import generate_hr_question
 from agents.resume_based.node import generate_resume_question
 from agents.supervisor.node import plan_session_next_step
 from agents.technical_coding.node import generate_coding_question
+from agents.shared import build_llm, safe_json_parse
+
+try:
+    from pypdf import PdfReader
+except ImportError:  # optional dependency in local dev
+    PdfReader = None
 
 try:
     from redis import Redis
@@ -81,6 +91,116 @@ def _parse_resume_text(text: str) -> Dict[str, Any]:
         "education": [],
         "claimed_strengths": [],
     }
+
+
+def _extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
+    if not pdf_bytes or PdfReader is None:
+        return ""
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+        pages = [page.extract_text() or "" for page in reader.pages]
+        return "\n".join(pages).strip()
+    except Exception:
+        return ""
+
+
+def _extract_resume_text(resume_content: Dict[str, Any]) -> str:
+    if not isinstance(resume_content, dict):
+        return ""
+    content_format = (resume_content.get("format") or "text").strip().lower()
+    raw_data = resume_content.get("data") or ""
+    if not raw_data:
+        return ""
+
+    if content_format == "text":
+        return str(raw_data).strip()
+
+    if content_format == "pdf_base64":
+        try:
+            pdf_bytes = base64.b64decode(raw_data, validate=False)
+        except Exception:
+            return ""
+        return _extract_text_from_pdf_bytes(pdf_bytes)
+
+    if content_format == "url":
+        try:
+            request = Request(
+                str(raw_data),
+                headers={"User-Agent": "MockInterviewAI/1.0 (+resume-ingestion)"},
+            )
+            with urlopen(request, timeout=8) as response:
+                data = response.read()
+                content_type = (response.headers.get("Content-Type") or "").lower()
+            if "pdf" in content_type or str(raw_data).lower().endswith(".pdf"):
+                return _extract_text_from_pdf_bytes(data)
+            decoded = data.decode("utf-8", errors="ignore")
+            return decoded.strip()
+        except Exception:
+            return ""
+
+    return str(raw_data).strip()
+
+
+def _parse_resume_with_llm(resume_text: str) -> Dict[str, Any]:
+    llm = build_llm()
+    if llm is None or not resume_text.strip():
+        return {}
+
+    prompt = f"""
+You are extracting structured resume details for an interview assistant.
+Return valid JSON only with this schema:
+{{
+  "skills": ["..."],
+  "experience_years": 0,
+  "projects": ["..."],
+  "education": ["..."],
+  "claimed_strengths": ["..."],
+  "topics": ["..."],
+  "summary": "..."
+}}
+
+Rules:
+- Infer concise interview-relevant topics from the resume (max 12 topics).
+- Keep each list short and de-duplicated.
+- "experience_years" should be an integer if inferable, else 0.
+- No markdown, no commentary.
+
+Resume text:
+{resume_text[:12000]}
+""".strip()
+
+    try:
+        response = llm.invoke(prompt)
+        parsed = safe_json_parse(response.content if hasattr(response, "content") else str(response))
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        return {}
+    return {}
+
+
+def _merge_resume_parsed(parsed_resume: Dict[str, Any], llm_resume: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(parsed_resume or {})
+    for key in ["skills", "projects", "education", "claimed_strengths", "topics"]:
+        values = llm_resume.get(key) if isinstance(llm_resume, dict) else None
+        if isinstance(values, list):
+            cleaned = [str(item).strip() for item in values if str(item).strip()]
+            if cleaned:
+                merged[key] = cleaned[:12]
+
+    exp_years = llm_resume.get("experience_years") if isinstance(llm_resume, dict) else None
+    if isinstance(exp_years, (int, float)) and exp_years >= 0:
+        merged["experience_years"] = int(exp_years)
+    elif isinstance(exp_years, str):
+        match = re.search(r"\d+", exp_years)
+        if match:
+            merged["experience_years"] = int(match.group())
+
+    summary = llm_resume.get("summary") if isinstance(llm_resume, dict) else None
+    if isinstance(summary, str) and summary.strip():
+        merged["summary"] = summary.strip()
+
+    return merged
 
 
 def _log_event(session: Dict[str, Any], event: str, data: Dict[str, Any]) -> None:
@@ -245,6 +365,17 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             {
                 "topic_tags": ["arrays", "sliding_window"],
                 "question_text": f"Given an integer array nums, return the minimum length subarray with sum >= target for a {role} interview at {company}.",
+                "examples": [
+                    {
+                        "input": {"nums": [2, 3, 1, 2, 4, 3], "target": 7},
+                        "output": "2",
+                        "explanation": "Subarray [4,3] has the minimum length 2 with sum >= 7.",
+                    }
+                ],
+                "test_cases": [
+                    {"input": {"nums": [2, 3, 1, 2, 4, 3], "target": 7}, "expected_output": "2"},
+                    {"input": {"nums": [1, 1, 1, 1, 1], "target": 11}, "expected_output": "0"},
+                ],
                 "expected_solution_outline": ["sliding window", "expand right", "shrink left when sum >= target"],
                 "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)"},
                 "followup_questions": [
@@ -255,6 +386,17 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             {
                 "topic_tags": ["hashmap", "prefix_sum"],
                 "question_text": f"Find if a subarray with sum k exists in nums using an approach expected at {company}.",
+                "examples": [
+                    {
+                        "input": {"nums": [1, 2, 3], "k": 5},
+                        "output": "true",
+                        "explanation": "Subarray [2,3] sums to 5.",
+                    }
+                ],
+                "test_cases": [
+                    {"input": {"nums": [1, 2, 3], "k": 5}, "expected_output": "true"},
+                    {"input": {"nums": [1, 2, 3], "k": 7}, "expected_output": "false"},
+                ],
                 "expected_solution_outline": ["prefix sum", "hashmap lookup"],
                 "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(n)"},
                 "followup_questions": [
@@ -265,6 +407,17 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             {
                 "topic_tags": ["two_pointers", "strings"],
                 "question_text": f"Given a string, find the longest substring without repeating characters and explain trade-offs.",
+                "examples": [
+                    {
+                        "input": {"s": "abcabcbb"},
+                        "output": "3",
+                        "explanation": "Longest substring without repeating chars is 'abc', length 3.",
+                    }
+                ],
+                "test_cases": [
+                    {"input": {"s": "abcabcbb"}, "expected_output": "3"},
+                    {"input": {"s": "bbbbb"}, "expected_output": "1"},
+                ],
                 "expected_solution_outline": ["two pointers", "character index map"],
                 "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)/O(k)"},
                 "followup_questions": [
@@ -275,6 +428,17 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             {
                 "topic_tags": ["intervals", "sorting"],
                 "question_text": "Merge overlapping intervals and discuss why sorting first is needed.",
+                "examples": [
+                    {
+                        "input": {"intervals": [[1, 3], [2, 6], [8, 10], [15, 18]]},
+                        "output": "[[1,6],[8,10],[15,18]]",
+                        "explanation": "After sorting by start, merge [1,3] and [2,6].",
+                    }
+                ],
+                "test_cases": [
+                    {"input": {"intervals": [[1, 3], [2, 6], [8, 10], [15, 18]]}, "expected_output": "[[1,6],[8,10],[15,18]]"},
+                    {"input": {"intervals": [[1, 4], [4, 5]]}, "expected_output": "[[1,5]]"},
+                ],
                 "expected_solution_outline": ["sort by start", "merge sweep"],
                 "time_space_targets": {"expected_time": "O(n log n)", "expected_space": "O(n)"},
                 "followup_questions": [
@@ -436,7 +600,15 @@ def _generate_system_design_question(role: str, company: str, preferred_topics: 
 def _resume_summary(session: Dict[str, Any]) -> str:
     parsed_resume = session.get("candidate", {}).get("resume_parsed", {})
     skills = ", ".join(parsed_resume.get("skills", [])[:6]) or "No explicit skills listed"
-    return f"Skills: {skills}. Experience years: {parsed_resume.get('experience_years', 0)}."
+    projects = ", ".join(parsed_resume.get("projects", [])[:3]) or "No projects captured"
+    topics = ", ".join(parsed_resume.get("topics", [])[:6]) or "No resume topics inferred"
+    llm_summary = parsed_resume.get("summary") or ""
+    base = (
+        f"Skills: {skills}. Projects: {projects}. "
+        f"Experience years: {parsed_resume.get('experience_years', 0)}. "
+        f"Interview topics: {topics}."
+    )
+    return f"{base} Summary: {llm_summary}".strip()
 
 
 def _generate_question_from_agent(
@@ -505,6 +677,17 @@ def _generate_question_from_agent(
             question_pack.setdefault("selected_topics", selected_topics)
             question_pack.setdefault("core_question_text", question_pack.get("question_text", ""))
             question_pack.setdefault("followup_questions", [])
+            if agent_type == "code":
+                examples = question_pack.get("examples", []) or []
+                if "test_cases" not in question_pack and examples:
+                    question_pack["test_cases"] = [
+                        {
+                            "input": example.get("input"),
+                            "expected_output": example.get("output"),
+                        }
+                        for example in examples
+                        if example.get("output") is not None
+                    ]
             return question_pack
     except Exception:
         pass
@@ -767,10 +950,34 @@ def _resolve_next_turn_spec(
 
 def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
     session_id = f"S_{uuid.uuid4().hex[:8]}"
-    parsed_resume = _parse_resume_text(payload["resume_content"]["data"])
+    resume_content = payload.get("resume_content", {}) or {}
+    resume_text = _extract_resume_text(resume_content)
+    parsed_resume = _parse_resume_text(resume_text)
+    llm_resume = _parse_resume_with_llm(resume_text)
+    parsed_resume = _merge_resume_parsed(parsed_resume, llm_resume)
     created_at = _now_iso()
 
-    round_sequence = _build_round_sequence(payload)
+    payload_topics = _normalize_topics_map(payload.get("topics", {}))
+    inferred_resume_topics = parsed_resume.get("topics", []) if isinstance(parsed_resume, dict) else []
+    if inferred_resume_topics:
+        existing_resume_topics = payload_topics.get("resume-based", [])
+        merged_topics: List[str] = []
+        seen = set()
+        for topic in [*existing_resume_topics, *inferred_resume_topics]:
+            normalized = str(topic).strip()
+            if not normalized:
+                continue
+            key = normalized.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged_topics.append(normalized)
+        payload_topics["resume-based"] = merged_topics[:12]
+
+    payload_with_resume_topics = dict(payload)
+    payload_with_resume_topics["topics"] = payload_topics
+
+    round_sequence = _build_round_sequence(payload_with_resume_topics)
     turn_plan = _expand_round_sequence(round_sequence, payload["total_turns_planned"])
     first_turn_spec = turn_plan[0] if turn_plan else {"round_type": "tech-dsa", "agent_type": "code", "topics": []}
     first_agent = first_turn_spec["agent_type"]
@@ -794,7 +1001,7 @@ def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
             "total_turns_planned": payload["total_turns_planned"],
             "turn_distribution": payload["turn_distribution"],
             "selected_types": payload.get("selected_types", []),
-            "topics": _normalize_topics_map(payload.get("topics", {})),
+            "topics": payload_topics,
         },
         "round_sequence": round_sequence,
         "turn_plan": turn_plan,
@@ -832,6 +1039,7 @@ def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
         {
             "session_id": session_id,
             "turn_plan": turn_plan,
+            "inferred_resume_topics": inferred_resume_topics,
             "first_question": session["latest_question"],
         },
     )

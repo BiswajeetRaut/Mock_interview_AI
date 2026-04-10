@@ -1,13 +1,11 @@
 // src/components/VideoCard.jsx
 import React from "react";
-import { Box, Flex, Text, IconButton } from "@chakra-ui/react";
-import { Maximize2 } from "lucide-react";
+import { Box, Flex, Text } from "@chakra-ui/react";
 
 export default function VideoCard({
     label,
     gradient,
     speaking = false,
-    compact = false,
 }) {
     return (
         <Box
@@ -17,7 +15,7 @@ export default function VideoCard({
             border="1px solid rgba(255,255,255,0.16)"
             backdropFilter="blur(20px)"
             overflow="hidden"
-            minH={compact ? "190px" : { base: "260px", md: "340px" }}
+            minH={{ base: "260px", md: "340px" }}
             flex="1"
             role="group"
             transition="all 0.25s ease"
@@ -25,14 +23,14 @@ export default function VideoCard({
             {/* Center avatar */}
             <Flex position="absolute" inset="0" align="center" justify="center">
                 <Flex
-                    h={compact ? "72px" : { base: "96px", md: "140px" }}
-                    w={compact ? "72px" : { base: "96px", md: "140px" }}
+                    h={{ base: "96px", md: "140px" }}
+                    w={{ base: "96px", md: "140px" }}
                     borderRadius="full"
                     bgGradient={gradient}
                     align="center"
                     justify="center"
                     fontWeight="bold"
-                    fontSize={compact ? "lg" : { base: "2xl", md: "3xl" }}
+                    fontSize={{ base: "2xl", md: "3xl" }}
                     transform={speaking ? "scale(1.1)" : "scale(1)"}
                     boxShadow={
                         speaking
@@ -44,18 +42,6 @@ export default function VideoCard({
                     {label}
                 </Flex>
             </Flex>
-
-            {/* Speaking bars */}
-            {speaking && (
-                <Flex
-                    position="absolute"
-                    bottom="50%"
-                    left="50%"
-                    transform="translate(-50%, 50%)"
-                    gap={1}
-                >
-                </Flex>
-            )}
 
             {/* Label pill */}
             <Flex
