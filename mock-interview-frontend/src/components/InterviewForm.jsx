@@ -27,7 +27,12 @@ const ROLE_LIST = [
     "Intern", "UI Engineer", "Platform Engineer"
 ];
 
-export default function InterviewForm({ company, custom = false, onSubmit }) {
+export default function InterviewForm({
+    company,
+    custom = false,
+    onSubmit,
+    isSubmitting = false,
+}) {
     const [role, setRole] = useState("");
     const [exp, setExp] = useState(2);
     const [types, setType] = useState("tech-dsa");
@@ -248,7 +253,9 @@ export default function InterviewForm({ company, custom = false, onSubmit }) {
                 colorScheme="blue"
                 size="lg"
                 onClick={handleContinue}
-                isDisabled={!isFormValid()}
+                isDisabled={!isFormValid() || isSubmitting}
+                isLoading={isSubmitting}
+                loadingText={custom ? "Continuing" : "Starting"}
             >
                 {custom ? "Continue" : "Start Interview"}
             </Button>

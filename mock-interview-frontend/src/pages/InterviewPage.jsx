@@ -9,6 +9,7 @@ import {
   Button,
   Textarea,
   Badge,
+  Spinner,
 } from "@chakra-ui/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -164,12 +165,57 @@ function MiniVideoCard({ label, speaking, dotColor }) {
   );
 }
 
+function TypingBubble({ label = "AI is thinking" }) {
+  return (
+    <MotionBox
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18 }}
+      alignSelf="flex-start"
+      maxW="82%"
+    >
+      <Flex direction="column" gap="3px" align="flex-start">
+        <Text fontSize="10px" color="gray.600" fontWeight="500" letterSpacing="0.04em" px={1}>
+          INTERVIEWER
+        </Text>
+        <Box
+          px={4}
+          py={3}
+          borderRadius="3px 12px 12px 12px"
+          bg="rgba(99,179,237,0.055)"
+          border="1px solid rgba(99,179,237,0.13)"
+        >
+          <HStack spacing={2.5}>
+            <HStack spacing="5px">
+              {[0, 1, 2].map((index) => (
+                <Box
+                  key={index}
+                  h="6px"
+                  w="6px"
+                  borderRadius="full"
+                  bg="blue.300"
+                  style={{
+                    animation: `typingPulse 0.9s ease-in-out ${index * 0.12}s infinite`,
+                  }}
+                />
+              ))}
+            </HStack>
+            <Text fontSize="12px" color="gray.400">
+              {label}
+            </Text>
+          </HStack>
+        </Box>
+      </Flex>
+    </MotionBox>
+  );
+}
+
 // ── Answer composer dock (shared between modes) ───────────────────────────────
 function AnswerComposer({
   composerExpanded, setComposerExpanded,
   listening, answerDraft, setAnswerDraft,
   textareaRef, handleKeyDown,
-  handleRecordToggle, handleSendAnswer, canSend,
+  handleRecordToggle, handleSendAnswer, canSend, isSending, awaitingReplyLabel,
 }) {
   return (
     <Box flexShrink={0} px={3} pb={3} pt={1.5}>
@@ -220,6 +266,12 @@ function AnswerComposer({
                     </Text>
                   </HStack>
                 </MotionBox>
+              ) : isSending ? (
+                <MotionBox key="sending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.14 }}>
+                  <Text fontSize="11.5px" color="blue.300" fontWeight="500">
+                    {awaitingReplyLabel || "Sending answer..."}
+                  </Text>
+                </MotionBox>
               ) : (
                 <MotionBox key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.14 }}>
                   <Text fontSize="11.5px" color="gray.500" fontWeight="500">Your answer</Text>
@@ -248,6 +300,7 @@ function AnswerComposer({
               leftIcon={listening ? <MicOff size={11} /> : <Mic size={11} />}
               transition="all 0.16s"
               onClick={handleRecordToggle}
+              isDisabled={isSending}
             >
               {listening ? "Stop" : "Record"}
             </Button>
@@ -261,6 +314,8 @@ function AnswerComposer({
               _hover={canSend ? { bg: "blue.400" } : {}}
               rightIcon={<Send size={10} />}
               isDisabled={!canSend}
+              isLoading={isSending}
+              loadingText="Sending"
               transition="all 0.18s"
               style={canSend ? { boxShadow: "0 2px 10px rgba(99,179,237,0.28)" } : {}}
               onClick={handleSendAnswer}
@@ -276,6 +331,7 @@ function AnswerComposer({
               _hover={{ bg: "rgba(255,255,255,0.06)", color: "gray.400" }}
               transition="all 0.14s"
               onClick={() => setComposerExpanded((v) => !v)}
+              isDisabled={isSending}
             />
           </HStack>
         </Flex>
@@ -304,6 +360,7 @@ function AnswerComposer({
                   }
                   rows={3}
                   resize="none"
+                  isDisabled={isSending}
                   bg="transparent"
                   border="none"
                   p={0}
@@ -346,6 +403,10 @@ export default function InterviewPage() {
   const [isAISpeaking, setIsAISpeaking] = useState(false);
   const [composerExpanded, setComposerExpanded] = useState(true);
   const [codePanelWidth, setCodePanelWidth] = useState(38);
+  const [isSessionLoading, setIsSessionLoading] = useState(!sessionFromState);
+  const [isSendingAnswer, setIsSendingAnswer] = useState(false);
+  const [isAwaitingReply, setIsAwaitingReply] = useState(false);
+  const [isEndingInterview, setIsEndingInterview] = useState(false);
   const textareaRef = useRef(null);
   const codeLayoutRef = useRef(null);
   const codeDragStateRef = useRef({ active: false });
@@ -389,12 +450,15 @@ export default function InterviewPage() {
     const loadSession = async () => {
       if (!id) return;
       try {
+        setIsSessionLoading(true);
         const current = await fetchSessionState(id);
         setSessionState(current);
         setTranscriptEntries(buildTranscriptFromSession(current));
       } catch (err) { console.error(err); }
+      finally { setIsSessionLoading(false); }
     };
     if (!sessionFromState) { loadSession(); return; }
+    setIsSessionLoading(false);
     setTranscriptEntries(buildTranscriptFromSession(sessionFromState));
   }, [id, sessionFromState]);
 
@@ -483,6 +547,7 @@ export default function InterviewPage() {
   const handleEnd = async () => {
     if (!window.confirm("End the interview?")) return;
     try {
+      setIsEndingInterview(true);
       if (!id) return;
       await endSession(id, sessionState?.status === "active" ? "manual_end" : "completed");
       const report = await fetchSessionReport(id);
@@ -504,9 +569,11 @@ export default function InterviewPage() {
         },
       });
     } catch (err) { console.error(err); alert("An error occurred."); }
+    finally { setIsEndingInterview(false); }
   };
 
   const handleRecordToggle = () => {
+    if (isSendingAnswer) return;
     if (!browserSupportsSpeechRecognition) { alert("Speech recognition not supported."); return; }
     if (speechRef.current) { speechRef.current.cancel(); setIsAISpeaking(false); }
     if (listening) { SpeechRecognition.abortListening(); return; }
@@ -519,18 +586,27 @@ export default function InterviewPage() {
 
   const handleSendAnswer = async () => {
     const answer = answerDraft.trim() || finalTranscript.trim();
-    if (!answer || !id) return;
+    if (!answer || !id || isSendingAnswer) return;
+    const optimisticEntryId = globalThis.crypto?.randomUUID?.() || `TMP_${Date.now()}`;
     try {
+      setIsSendingAnswer(true);
+      setIsAwaitingReply(true);
       speechRef.current?.cancel();
       setIsAISpeaking(false);
       if (listening) SpeechRecognition.abortListening();
+      setTranscriptEntries((prev) => [
+        ...prev,
+        { id: optimisticEntryId, speaker: "YOU", text: answer, time: timestamp() },
+      ]);
+      setAnswerDraft("");
+      resetTranscript();
       const requestId = globalThis.crypto?.randomUUID?.() || `REQ_${Date.now()}`;
       const updated = await submitSessionAnswer(id, answer, requestId);
       setSessionState(updated);
       const nextQ = updated.latest_question?.question_text;
       const done = !nextQ && updated.status !== "active";
       setTranscriptEntries((prev) => [
-        ...prev,
+        ...prev.filter((entry) => entry.id !== optimisticEntryId),
         { speaker: "YOU", text: answer, time: timestamp() },
         {
           speaker: "AI",
@@ -540,19 +616,26 @@ export default function InterviewPage() {
           time: timestamp(),
         },
       ]);
-      setAnswerDraft("");
-      resetTranscript();
-    } catch (err) { console.error(err); alert("Could not send your answer."); }
+    } catch (err) {
+      setTranscriptEntries((prev) => prev.filter((entry) => entry.id !== optimisticEntryId));
+      setAnswerDraft(answer);
+      console.error(err);
+      alert("Could not send your answer.");
+    } finally {
+      setIsSendingAnswer(false);
+      setIsAwaitingReply(false);
+    }
   };
 
   const handleKeyDown = (e) => {
+    if (isSendingAnswer) return;
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSendAnswer(); }
   };
 
   const isCodingQuestion = sessionState?.latest_question?.agent_type === "code";
   const codingQuestionPack = sessionState?.latest_question || null;
   const testCases = codingQuestionPack?.test_cases || [];
-  const canSend = !!(answerDraft.trim() || finalTranscript.trim());
+  const canSend = !!(answerDraft.trim() || finalTranscript.trim()) && !isSendingAnswer;
 
   useEffect(() => { if (isCodingQuestion) setShowCode(true); }, [isCodingQuestion]);
   useEffect(() => { setRunResult(null); }, [sessionState?.latest_question?.question_id]);
@@ -582,6 +665,7 @@ export default function InterviewPage() {
         ? `All ${result.total} test cases passed.`
         : `${result.passed}/${result.total} test cases passed.`;
       const requestId = globalThis.crypto?.randomUUID?.() || `REQ_${Date.now()}`;
+      setIsAwaitingReply(true);
       const updated = await submitSessionAnswer(id, `Code submission: ${summary}`, requestId, code, language);
       setSessionState(updated);
       const aiReply = updated.latest_question?.question_text || "Code submitted. Let's continue.";
@@ -592,19 +676,41 @@ export default function InterviewPage() {
       ]);
       setAnswerDraft("");
     } catch (err) { alert(err?.response?.data?.detail || "Failed to submit."); }
-    finally { setIsSubmittingCode(false); }
+    finally {
+      setIsSubmittingCode(false);
+      setIsAwaitingReply(false);
+    }
   };
 
   const composerProps = {
     composerExpanded, setComposerExpanded, listening,
     answerDraft, setAnswerDraft, textareaRef, handleKeyDown,
     handleRecordToggle, handleSendAnswer, canSend,
+    isSending: isSendingAnswer,
+    awaitingReplyLabel: isAwaitingReply ? "Waiting for interviewer..." : "",
   };
 
   const handleCodePanelResizeStart = (event) => {
     event.preventDefault();
     codeDragStateRef.current.active = true;
   };
+
+  if (isSessionLoading && !sessionState) {
+    return (
+      <Flex
+        h="100vh"
+        bg="#080a0e"
+        color="white"
+        align="center"
+        justify="center"
+        direction="column"
+        gap={4}
+      >
+        <Spinner size="lg" color="blue.300" thickness="3px" />
+        <Text fontSize="14px" color="gray.400">Loading interview session...</Text>
+      </Flex>
+    );
+  }
 
   return (
     <>
@@ -670,6 +776,8 @@ export default function InterviewPage() {
               _active={{ transform: "scale(0.97)" }}
               transition="all 0.16s"
               onClick={handleEnd}
+              isLoading={isEndingInterview}
+              loadingText="Ending"
             >
               End Interview
             </Button>
@@ -775,6 +883,7 @@ export default function InterviewPage() {
                       maxWidth="100%"
                     />
                   ))}
+                  {isAwaitingReply && <TypingBubble label="AI is thinking..." />}
                   <div ref={transcriptEndRef} />
                 </Flex>
               </Flex>
@@ -975,6 +1084,12 @@ export default function InterviewPage() {
                           </Text>
                         </Box>
                       ))}
+                      {isAwaitingReply && (
+                        <HStack spacing={2}>
+                          <Spinner size="xs" color="blue.300" />
+                          <Text fontSize="12px" color="gray.400">AI is thinking...</Text>
+                        </HStack>
+                      )}
                     </Flex>
                   </Box>
                 </Flex>
@@ -1022,6 +1137,10 @@ export default function InterviewPage() {
       <style>{`
         @keyframes ping { 75%, 100% { transform: scale(2.1); opacity: 0; } }
         @keyframes soundBar { from { height: 3px; } to { height: 14px; } }
+        @keyframes typingPulse {
+          0%, 80%, 100% { transform: scale(0.7); opacity: 0.45; }
+          40% { transform: scale(1); opacity: 1; }
+        }
       `}</style>
     </>
   );

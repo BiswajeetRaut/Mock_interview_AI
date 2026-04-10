@@ -61,6 +61,7 @@ export default function CustomAdvancedSetup() {
         "resume-based": []
     });
     const [resume, setResume] = useState(initialResume);
+    const [isStarting, setIsStarting] = useState(false);
 
     const fileInputRef = useRef();
 
@@ -90,35 +91,43 @@ export default function CustomAdvancedSetup() {
     };
 
     const handleStart = async () => {
-        const selectedTopics = selectedTypes.reduce((acc, typeId) => {
-            acc[typeId] = topicsMap[typeId] || [];
-            return acc;
-        }, {});
+        setIsStarting(true);
+        try {
+            const selectedTopics = selectedTypes.reduce((acc, typeId) => {
+                acc[typeId] = topicsMap[typeId] || [];
+                return acc;
+            }, {});
 
-        const payload = await buildSessionStartPayload({
-            company,
-            role,
-            experience,
-            jd,
-            resume,
-            selectedTypes,
-            topics: selectedTopics,
-        });
-
-        const session = await startSession(payload);
-
-        navigate(`/interview/${session.session_id}`, {
-            state: {
-                id: session.session_id,
+            const payload = await buildSessionStartPayload({
                 company,
                 role,
                 experience,
                 jd,
                 resume,
-                topicsMap,
-                session,
-            },
-        });
+                selectedTypes,
+                topics: selectedTopics,
+            });
+
+            const session = await startSession(payload);
+
+            navigate(`/interview/${session.session_id}`, {
+                state: {
+                    id: session.session_id,
+                    company,
+                    role,
+                    experience,
+                    jd,
+                    resume,
+                    topicsMap,
+                    session,
+                },
+            });
+        } catch (err) {
+            console.error(err);
+            alert("Could not start the interview. Please try again.");
+        } finally {
+            setIsStarting(false);
+        }
 
     };
 
@@ -238,7 +247,10 @@ export default function CustomAdvancedSetup() {
                     colorScheme="blue"
                     w="full"
                     onClick={handleStart}
+                    isLoading={isStarting}
+                    loadingText="Starting Interview"
                     isDisabled={
+                        isStarting ||
                         selectedTypes.length === 0 ||
                         (selectedTypes.includes("resume-based") && !resume)
                     }

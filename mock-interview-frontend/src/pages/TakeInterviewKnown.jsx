@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Box, Heading, useColorModeValue } from "@chakra-ui/react";
 import InterviewForm from "../components/InterviewForm";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -10,27 +10,36 @@ export default function TakeInterviewKnown() {
     const company = params.get("company");
     const navigate = useNavigate();
     const bg = useColorModeValue("gray.100", "gray.800");
+    const [isStarting, setIsStarting] = useState(false);
 
     const handleSubmit = async (formData) => {
-        const selectedTypes = Object.keys(formData.topics || {});
-        const payload = await buildSessionStartPayload({
-            company: formData.company,
-            role: formData.role,
-            experience: formData.experience,
-            jd: formData.jd,
-            resume: formData.resume,
-            selectedTypes,
-            topics: formData.topics,
-        });
-        const session = await startSession(payload);
+        setIsStarting(true);
+        try {
+            const selectedTypes = Object.keys(formData.topics || {});
+            const payload = await buildSessionStartPayload({
+                company: formData.company,
+                role: formData.role,
+                experience: formData.experience,
+                jd: formData.jd,
+                resume: formData.resume,
+                selectedTypes,
+                topics: formData.topics,
+            });
+            const session = await startSession(payload);
 
-        navigate(`/interview/${session.session_id}`, {
-            state: {
-                ...formData,
-                id: session.session_id,
-                session,
-            },
-        });
+            navigate(`/interview/${session.session_id}`, {
+                state: {
+                    ...formData,
+                    id: session.session_id,
+                    session,
+                },
+            });
+        } catch (err) {
+            console.error(err);
+            alert("Could not start the interview. Please try again.");
+        } finally {
+            setIsStarting(false);
+        }
     };
 
 
@@ -40,7 +49,12 @@ export default function TakeInterviewKnown() {
                 {company} — Interview Setup
             </Heading>
 
-            <InterviewForm company={company} showJD={false} onSubmit={handleSubmit} />
+            <InterviewForm
+                company={company}
+                showJD={false}
+                onSubmit={handleSubmit}
+                isSubmitting={isStarting}
+            />
         </Box>
     );
 }
