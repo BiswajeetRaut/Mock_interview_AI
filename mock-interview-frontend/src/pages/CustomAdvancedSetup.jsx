@@ -18,7 +18,8 @@ import {
     SYSTEM_DESIGN_TOPICS,
     MANAGERIAL_TOPICS
 } from "../data/topics";
-import { createInterview } from "../api/interview.api";
+import { startSession } from "../api/session.api";
+import { buildSessionStartPayload } from "../utils/sessionPayload";
 
 const INTERVIEW_TYPES = [
     {
@@ -47,7 +48,8 @@ export default function CustomAdvancedSetup() {
     const { state } = useLocation();
     const navigate = useNavigate();
 
-    const { company, role, experience, jd, resume } = state;
+    const initialResume = state?.resume ?? null;
+    const { company, role, experience, jd } = state || {};
 
     const bg = useColorModeValue("gray.100", "gray.900");
 
@@ -58,6 +60,8 @@ export default function CustomAdvancedSetup() {
         "managerial": [],
         "resume-based": []
     });
+    const [resume, setResume] = useState(initialResume);
+    const [isStarting, setIsStarting] = useState(false);
 
     const fileInputRef = useRef();
 
@@ -87,10 +91,59 @@ export default function CustomAdvancedSetup() {
     };
 
     const handleStart = async () => {
-        const res = await createInterview({ company, role, experience, jd, resume, topics: topicsMap });
-        navigate(`/interview/${res.id}`, { state: { id: res.id, company, role, experience, jd, resume, topicsMap } });
+        setIsStarting(true);
+        try {
+            const selectedTopics = selectedTypes.reduce((acc, typeId) => {
+                acc[typeId] = topicsMap[typeId] || [];
+                return acc;
+            }, {});
+
+            const payload = await buildSessionStartPayload({
+                company,
+                role,
+                experience,
+                jd,
+                resume,
+                selectedTypes,
+                topics: selectedTopics,
+            });
+
+            const session = await startSession(payload);
+
+            navigate(`/interview/${session.session_id}`, {
+                state: {
+                    id: session.session_id,
+                    company,
+                    role,
+                    experience,
+                    jd,
+                    resume,
+                    topicsMap,
+                    session,
+                },
+            });
+        } catch (err) {
+            console.error(err);
+            alert("Could not start the interview. Please try again.");
+        } finally {
+            setIsStarting(false);
+        }
 
     };
+
+    if (!state) {
+        return (
+            <Box maxW="850px" mx="auto" mt="40px" p="8" bg={bg} rounded="xl" shadow="xl">
+                <Heading size="md">Setup expired</Heading>
+                <Text mt="3" color="gray.400">
+                    Please restart the interview setup flow.
+                </Text>
+                <Button mt="6" colorScheme="blue" onClick={() => navigate("/take-interview")}>
+                    Go to Setup
+                </Button>
+            </Box>
+        );
+    }
 
     return (
         <Box
@@ -194,7 +247,10 @@ export default function CustomAdvancedSetup() {
                     colorScheme="blue"
                     w="full"
                     onClick={handleStart}
+                    isLoading={isStarting}
+                    loadingText="Starting Interview"
                     isDisabled={
+                        isStarting ||
                         selectedTypes.length === 0 ||
                         (selectedTypes.includes("resume-based") && !resume)
                     }

@@ -1,18 +1,45 @@
-import React from "react";
+import React, { useState } from "react";
 import { Box, Heading, useColorModeValue } from "@chakra-ui/react";
 import InterviewForm from "../components/InterviewForm";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { createInterview } from "../api/interview.api";
+import { startSession } from "../api/session.api";
+import { buildSessionStartPayload } from "../utils/sessionPayload";
 
 export default function TakeInterviewKnown() {
     const [params] = useSearchParams();
     const company = params.get("company");
     const navigate = useNavigate();
     const bg = useColorModeValue("gray.100", "gray.800");
+    const [isStarting, setIsStarting] = useState(false);
 
     const handleSubmit = async (formData) => {
-        const res = await createInterview(formData);
-        navigate(`/interview/${res.id}`, { state: { ...formData, id: res.id } });
+        setIsStarting(true);
+        try {
+            const selectedTypes = Object.keys(formData.topics || {});
+            const payload = await buildSessionStartPayload({
+                company: formData.company,
+                role: formData.role,
+                experience: formData.experience,
+                jd: formData.jd,
+                resume: formData.resume,
+                selectedTypes,
+                topics: formData.topics,
+            });
+            const session = await startSession(payload);
+
+            navigate(`/interview/${session.session_id}`, {
+                state: {
+                    ...formData,
+                    id: session.session_id,
+                    session,
+                },
+            });
+        } catch (err) {
+            console.error(err);
+            alert("Could not start the interview. Please try again.");
+        } finally {
+            setIsStarting(false);
+        }
     };
 
 
@@ -22,7 +49,12 @@ export default function TakeInterviewKnown() {
                 {company} — Interview Setup
             </Heading>
 
-            <InterviewForm company={company} showJD={false} onSubmit={handleSubmit} />
+            <InterviewForm
+                company={company}
+                showJD={false}
+                onSubmit={handleSubmit}
+                isSubmitting={isStarting}
+            />
         </Box>
     );
 }

@@ -2,7 +2,6 @@ import React from "react";
 import { Box, Heading, useColorModeValue } from "@chakra-ui/react";
 import InterviewForm from "../components/InterviewForm";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../api/mockApi";
 
 export default function TakeInterviewCustom() {
     const [params] = useSearchParams();
@@ -11,7 +10,6 @@ export default function TakeInterviewCustom() {
     const bg = useColorModeValue("gray.100", "gray.800");
 
     const handleSubmit = async (formData) => {
-        const res = await api.createInterview(formData);
         navigate("/take-interview/custom-advanced", { state: formData });
     };
 

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import interview, companies, auth
+from routers import companies, auth, session, coding
 from fastapi.middleware.cors import CORSMiddleware
 from routers.interview import router as interview_router
 
@@ -15,10 +15,11 @@ app.add_middleware(
 )
 
 # Routers
-# app.include_router(interview.router, prefix="/interview", tags=["Interviews"])
 app.include_router(interview_router, prefix="/interview", tags=["interview"])
+app.include_router(coding.router, prefix="/coding", tags=["Coding"])
 app.include_router(companies.router, prefix="/companies", tags=["Companies"])
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+app.include_router(session.router, prefix="/session", tags=["Session"])
 
 
 @app.get("/")
