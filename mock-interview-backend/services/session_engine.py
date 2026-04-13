@@ -11,9 +11,9 @@ import uuid
 from typing import Any, Dict, List, Optional
 from agents.manegerial.node import generate_hr_question
 from agents.resume_based.node import generate_resume_question
-from agents.supervisor.node import plan_session_next_step
+from agents.supervisor.graph import app as interview_graph
 from agents.technical_coding.node import generate_coding_question
-from agents.shared import build_llm, safe_json_parse
+from agents.shared import build_llm, safe_json_parse, llm_generate_text
 
 try:
     from pypdf import PdfReader
@@ -215,41 +215,6 @@ def _log_event(session: Dict[str, Any], event: str, data: Dict[str, Any]) -> Non
     )
 
 
-def _pick_non_repeated(pool: List[Dict[str, Any]], asked_topics: List[str], topic_key: str) -> Dict[str, Any]:
-    asked_set = set([topic for topic in asked_topics if topic])
-    for item in pool:
-        topic_value = item.get(topic_key)
-        if isinstance(topic_value, list):
-            primary = topic_value[0] if topic_value else None
-        else:
-            primary = topic_value
-        if primary not in asked_set:
-            return item
-    return pool[len(asked_topics) % len(pool)]
-
-
-def _pick_preferred_item(
-    pool: List[Dict[str, Any]],
-    asked_topics: List[str],
-    topic_key: str,
-    preferred_topics: Optional[List[str]] = None,
-) -> Dict[str, Any]:
-    preferred = [topic.lower() for topic in (preferred_topics or [])]
-    if preferred:
-        for item in pool:
-            topic_value = item.get(topic_key)
-            topic_values = topic_value if isinstance(topic_value, list) else [topic_value]
-            normalized_values = [str(value).lower() for value in topic_values if value]
-            question_text = str(item.get("question_text", "")).lower()
-            if any(
-                pref in question_text
-                or any(pref in value or value in pref for value in normalized_values)
-                for pref in preferred
-            ):
-                return item
-    return _pick_non_repeated(pool, asked_topics, topic_key)
-
-
 def _normalize_round_type(round_type: str) -> str:
     return ROUND_TYPE_ALIASES.get(round_type, round_type)
 
@@ -347,11 +312,25 @@ def _turn_spec(session: Dict[str, Any], turn_counter: int) -> Dict[str, Any]:
 
 
 def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[str, Any]:
+    """LLM-powered fallback — only reached when the specialist coding agent fails."""
+    text = llm_generate_text(
+        f"You are a senior interviewer at {company} for the role of {role}.\n"
+        f"Difficulty: {difficulty}.\n"
+        f"Generate a single coding / data structures & algorithms interview question.\n"
+        f"Include a brief example with input and expected output.\n"
+        f"Return ONLY the question text (with the example), nothing else.",
+        temperature=0.6,
+    )
+    if not text:
+        text = f"Solve a coding problem relevant to {role} at {company}. Discuss your approach and time complexity."
     return {
+        "question_id": f"Q_CODE_{uuid.uuid4().hex[:6]}",
         "agent_type": "code",
         "difficulty": difficulty,
-        "input_output_format": {"input": "varies by problem", "output": "varies by problem"},
-        "constraints": ["1 <= n <= 1e5"],
+        "topic_tags": ["general"],
+        "question_text": text,
+        "core_question_text": text,
+        "followup_questions": [],
         "rubric": {
             "dimensions": [
                 {"key": "correctness", "max_score": 5},
@@ -361,99 +340,26 @@ def _generate_code_question(role: str, company: str, difficulty: str) -> Dict[st
             ],
             "max_total": 20,
         },
-        "catalog": [
-            {
-                "topic_tags": ["arrays", "sliding_window"],
-                "question_text": f"Given an integer array nums, return the minimum length subarray with sum >= target for a {role} interview at {company}.",
-                "examples": [
-                    {
-                        "input": {"nums": [2, 3, 1, 2, 4, 3], "target": 7},
-                        "output": "2",
-                        "explanation": "Subarray [4,3] has the minimum length 2 with sum >= 7.",
-                    }
-                ],
-                "test_cases": [
-                    {"input": {"nums": [2, 3, 1, 2, 4, 3], "target": 7}, "expected_output": "2"},
-                    {"input": {"nums": [1, 1, 1, 1, 1], "target": 11}, "expected_output": "0"},
-                ],
-                "expected_solution_outline": ["sliding window", "expand right", "shrink left when sum >= target"],
-                "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)"},
-                "followup_questions": [
-                    "Why is this valid only for positive integers?",
-                    "How would your solution change with negative numbers?",
-                ],
-            },
-            {
-                "topic_tags": ["hashmap", "prefix_sum"],
-                "question_text": f"Find if a subarray with sum k exists in nums using an approach expected at {company}.",
-                "examples": [
-                    {
-                        "input": {"nums": [1, 2, 3], "k": 5},
-                        "output": "true",
-                        "explanation": "Subarray [2,3] sums to 5.",
-                    }
-                ],
-                "test_cases": [
-                    {"input": {"nums": [1, 2, 3], "k": 5}, "expected_output": "true"},
-                    {"input": {"nums": [1, 2, 3], "k": 7}, "expected_output": "false"},
-                ],
-                "expected_solution_outline": ["prefix sum", "hashmap lookup"],
-                "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(n)"},
-                "followup_questions": [
-                    "How do you handle repeated prefix sums?",
-                    "Can this be optimized for memory?",
-                ],
-            },
-            {
-                "topic_tags": ["two_pointers", "strings"],
-                "question_text": f"Given a string, find the longest substring without repeating characters and explain trade-offs.",
-                "examples": [
-                    {
-                        "input": {"s": "abcabcbb"},
-                        "output": "3",
-                        "explanation": "Longest substring without repeating chars is 'abc', length 3.",
-                    }
-                ],
-                "test_cases": [
-                    {"input": {"s": "abcabcbb"}, "expected_output": "3"},
-                    {"input": {"s": "bbbbb"}, "expected_output": "1"},
-                ],
-                "expected_solution_outline": ["two pointers", "character index map"],
-                "time_space_targets": {"expected_time": "O(n)", "expected_space": "O(1)/O(k)"},
-                "followup_questions": [
-                    "What changes for unicode input?",
-                    "How would you return the substring itself?",
-                ],
-            },
-            {
-                "topic_tags": ["intervals", "sorting"],
-                "question_text": "Merge overlapping intervals and discuss why sorting first is needed.",
-                "examples": [
-                    {
-                        "input": {"intervals": [[1, 3], [2, 6], [8, 10], [15, 18]]},
-                        "output": "[[1,6],[8,10],[15,18]]",
-                        "explanation": "After sorting by start, merge [1,3] and [2,6].",
-                    }
-                ],
-                "test_cases": [
-                    {"input": {"intervals": [[1, 3], [2, 6], [8, 10], [15, 18]]}, "expected_output": "[[1,6],[8,10],[15,18]]"},
-                    {"input": {"intervals": [[1, 4], [4, 5]]}, "expected_output": "[[1,5]]"},
-                ],
-                "expected_solution_outline": ["sort by start", "merge sweep"],
-                "time_space_targets": {"expected_time": "O(n log n)", "expected_space": "O(n)"},
-                "followup_questions": [
-                    "Can you do this in-place?",
-                    "How do you prove correctness?",
-                ],
-            },
-        ],
     }
 
 
 def _generate_resume_question() -> Dict[str, Any]:
+    """LLM-powered fallback — only reached when the specialist resume agent fails."""
+    text = llm_generate_text(
+        "You are a senior interviewer.\n"
+        "Generate a single resume-based behavioral interview question using the STAR framework.\n"
+        "Return ONLY the question text, nothing else.",
+        temperature=0.6,
+    )
+    if not text:
+        text = "Tell me about a challenging project from your experience and walk through Situation, Task, Action, and Result."
     return {
+        "question_id": f"Q_RES_{uuid.uuid4().hex[:6]}",
         "agent_type": "resume",
-        "expected_framework": "STAR",
+        "topic_tag": "general",
+        "question_text": text,
+        "core_question_text": text,
+        "followup_questions": [],
         "rubric": {
             "dimensions": [
                 {"key": "situation_clarity", "max_score": 5},
@@ -463,38 +369,26 @@ def _generate_resume_question() -> Dict[str, Any]:
             ],
             "max_total": 20,
         },
-        "catalog": [
-            {
-                "topic_tag": "project_challenges",
-                "question_text": "Tell me about a real project challenge from your resume and walk through Situation, Task, Action, and Result.",
-                "followup_questions": [
-                    "What would you do differently next time?",
-                    "What metric proved success?",
-                ],
-            },
-            {
-                "topic_tag": "teamwork",
-                "question_text": "Describe a time you had a team disagreement and how you resolved it.",
-                "followup_questions": [
-                    "What did you learn about communication?",
-                    "How did your solution impact delivery?",
-                ],
-            },
-            {
-                "topic_tag": "ownership",
-                "question_text": "Tell me about a feature where you took end-to-end ownership.",
-                "followup_questions": [
-                    "How did you prioritize trade-offs?",
-                    "What metrics did you monitor post-release?",
-                ],
-            },
-        ],
     }
 
 
 def _generate_hr_question() -> Dict[str, Any]:
+    """LLM-powered fallback — only reached when the specialist HR agent fails."""
+    text = llm_generate_text(
+        "You are a senior interviewer.\n"
+        "Generate a single behavioral / HR interview question about teamwork, adaptability, or conflict resolution.\n"
+        "Return ONLY the question text, nothing else.",
+        temperature=0.6,
+    )
+    if not text:
+        text = "Tell me about a situation where you had to adapt to a sudden change in project requirements."
     return {
+        "question_id": f"Q_HR_{uuid.uuid4().hex[:6]}",
         "agent_type": "hr",
+        "topic_tag": "general",
+        "question_text": text,
+        "core_question_text": text,
+        "followup_questions": [],
         "rubric": {
             "dimensions": [
                 {"key": "self_awareness", "max_score": 5},
@@ -504,32 +398,6 @@ def _generate_hr_question() -> Dict[str, Any]:
             ],
             "max_total": 20,
         },
-        "catalog": [
-            {
-                "topic_tag": "adaptability",
-                "question_text": "Describe a situation where project requirements changed suddenly. How did you adapt?",
-                "followup_questions": [
-                    "How did your communication style help in this situation?",
-                    "What did you learn that changed your approach afterwards?",
-                ],
-            },
-            {
-                "topic_tag": "conflict_resolution",
-                "question_text": "Tell me about a conflict with a teammate and how you resolved it.",
-                "followup_questions": [
-                    "What would you handle differently now?",
-                    "How did you prevent recurring conflict?",
-                ],
-            },
-            {
-                "topic_tag": "culture_fit",
-                "question_text": "What kind of team culture helps you do your best work, and why?",
-                "followup_questions": [
-                    "How do you adapt when culture differs from preference?",
-                    "Give one example from past internships or projects.",
-                ],
-            },
-        ],
     }
 
 
@@ -541,46 +409,36 @@ def _generate_question(
     asked_topics: List[str],
     preferred_topics: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
+    """Thin dispatcher to the LLM-powered fallback generators."""
     if agent_type == "code":
-        base = _generate_code_question(role, company, difficulty)
-        selected = _pick_preferred_item(base["catalog"], asked_topics, "topic_tags", preferred_topics)
-        return {
-            "question_id": f"Q_CODE_{uuid.uuid4().hex[:6]}",
-            "core_question_text": selected["question_text"],
-            **{k: v for k, v in base.items() if k != "catalog"},
-            **selected,
-        }
+        return _generate_code_question(role, company, difficulty)
     if agent_type == "resume":
-        base = _generate_resume_question()
-        selected = _pick_preferred_item(base["catalog"], asked_topics, "topic_tag", preferred_topics)
-        return {
-            "question_id": f"Q_RES_{uuid.uuid4().hex[:6]}",
-            "core_question_text": selected["question_text"],
-            **{k: v for k, v in base.items() if k != "catalog"},
-            **selected,
-        }
-    base = _generate_hr_question()
-    selected = _pick_preferred_item(base["catalog"], asked_topics, "topic_tag", preferred_topics)
-    return {
-        "question_id": f"Q_HR_{uuid.uuid4().hex[:6]}",
-        "core_question_text": selected["question_text"],
-        **{k: v for k, v in base.items() if k != "catalog"},
-        **selected,
-    }
+        return _generate_resume_question()
+    return _generate_hr_question()
 
 
 def _generate_system_design_question(role: str, company: str, preferred_topics: Optional[List[str]] = None) -> Dict[str, Any]:
-    topic_hint = preferred_topics[0] if preferred_topics else "scalable notification delivery"
+    """LLM-powered system design question fallback."""
+    topic_hint = preferred_topics[0] if preferred_topics else "scalable system"
+    text = llm_generate_text(
+        f"You are a senior system design interviewer at {company} for the role of {role}.\n"
+        f"Topic hint: {topic_hint}.\n"
+        f"Generate a single system design interview question that covers:\n"
+        f"- Requirements gathering\n- API design\n- Data model\n- Scaling bottlenecks\n- Trade-offs\n"
+        f"Return ONLY the question text, nothing else.",
+        temperature=0.6,
+    )
+    if not text:
+        text = f"Design a {topic_hint} system. Walk through requirements, APIs, data model, scaling bottlenecks, and trade-offs."
     return {
         "question_id": f"Q_SYS_{uuid.uuid4().hex[:6]}",
         "agent_type": "code",
         "round_type": "system-design",
         "difficulty": "medium",
         "topic_tags": [topic_hint.lower().replace(" ", "_"), "system_design"],
-        "question_text": f"Design a {topic_hint} system for a {role} interview at {company}. Walk through requirements, APIs, data model, scaling bottlenecks, caching, and trade-offs.",
-        "core_question_text": f"Design a {topic_hint} system for a {role} interview at {company}. Walk through requirements, APIs, data model, scaling bottlenecks, caching, and trade-offs.",
-        "input_output_format": {"input": "product requirements and traffic assumptions", "output": "high-level and detailed system design"},
-        "constraints": ["Discuss scale assumptions", "Cover trade-offs", "Address bottlenecks and failure modes"],
+        "question_text": text,
+        "core_question_text": text,
+        "followup_questions": [],
         "rubric": {
             "dimensions": [
                 {"key": "requirements_clarity", "max_score": 5},
@@ -590,10 +448,6 @@ def _generate_system_design_question(role: str, company: str, preferred_topics: 
             ],
             "max_total": 20,
         },
-        "followup_questions": [
-            "What would become the first bottleneck as traffic grows 10x?",
-            "How would you change the design for stronger consistency guarantees?",
-        ],
     }
 
 
@@ -689,8 +543,17 @@ def _generate_question_from_agent(
                         if example.get("output") is not None
                     ]
             return question_pack
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_event(
+            session,
+            "agent_llm_failed",
+            {
+                "agent_type": agent_type,
+                "round_type": round_type,
+                "error": str(exc),
+                "fallback": "using hardcoded catalog",
+            },
+        )
 
     if agent_type == "code" and round_type == "system-design":
         return _generate_system_design_question(role, company, selected_topics)
@@ -718,31 +581,6 @@ def _candidate_first_name(session: Dict[str, Any]) -> str:
     return name.split()[0] if name else "there"
 
 
-def _candidate_signaled_stuck(answer_text: str) -> bool:
-    normalized = " ".join((answer_text or "").lower().split())
-    if not normalized:
-        return True
-
-    stuck_phrases = [
-        "i don't know",
-        "i dont know",
-        "do not know",
-        "not sure",
-        "no idea",
-        "i have no idea",
-        "i'm not sure",
-        "im not sure",
-        "can't remember",
-        "cannot remember",
-        "don't remember",
-        "do not remember",
-        "blanking",
-        "skip this",
-        "pass on this",
-        "move on",
-    ]
-    return any(phrase in normalized for phrase in stuck_phrases)
-
 
 def _decorate_question_text(
     session: Dict[str, Any],
@@ -762,11 +600,27 @@ def _decorate_question_text(
     transition_target = _round_type_label(round_type, agent_type)
 
     if intro_style == "opening":
-        prefix = (
-            f"Hi {candidate_first_name}, thanks for joining today. "
-            f"I'd like to keep this conversational and aligned to a {role} interview at {company}. "
-            f"let's begin with {transition_target}. "
+        opening = llm_generate_text(
+            f"You are a friendly interviewer starting a mock interview. "
+            f"The candidate's first name is {candidate_first_name}. "
+            f"Company: {company}. Role: {role}. "
+            f"First topic area: {transition_target}.\n"
+            f"Write a warm, natural 2–3 sentence greeting that:\n"
+            f"- Addresses the candidate by first name\n"
+            f"- Sets a conversational tone\n"
+            f"- Mentions the company and role naturally\n"
+            f"- Transitions into the first topic area\n"
+            f"Make it unique — never use the exact same phrasing twice. "
+            f"Do NOT include the actual interview question.",
+            temperature=0.8,
         )
+        if not opening:
+            opening = (
+                f"Hi {candidate_first_name}, thanks for joining today. "
+                f"I'd like to keep this conversational and aligned to a {role} interview at {company}. "
+                f"Let's begin with {transition_target}."
+            )
+        prefix = f"{opening.rstrip()} "
     elif supervisor_decision:
         acknowledgement = (supervisor_decision.get("acknowledgement") or "").strip()
         transition = (supervisor_decision.get("transition") or "").strip()
@@ -776,43 +630,32 @@ def _decorate_question_text(
     else:
         word_count = len(answer_text.split())
         score_pct = (evaluation or {}).get("percentage", 0)
-        if word_count < 20:
-            acknowledgement = "Thanks. I want to hear a bit more depth from you. "
-        elif score_pct >= 85:
-            acknowledgement = "Nice, that was a strong explanation. "
-        elif score_pct >= 65:
-            acknowledgement = "Thanks, that was helpful. "
+        is_switch = previous_agent and previous_agent != agent_type
+        scenario = (
+            f"Candidate answered with {word_count} words, scored {score_pct}%. "
+            f"{'Switching from ' + str(previous_agent) + ' to ' + str(agent_type) if is_switch else 'Continuing in ' + str(agent_type)}. "
+            f"Target area: {transition_target}."
+        )
+        generated = llm_generate_text(
+            f"You are a warm interviewer. Scenario: {scenario}\n"
+            f"Write TWO short sentences separated by a newline:\n"
+            f"Line 1: A unique, specific acknowledgement (no question marks).\n"
+            f"Line 2: A smooth transition sentence mentioning the next topic area.\n"
+            f"Be natural, never repeat the same phrasing.",
+            temperature=0.8,
+        )
+        if generated:
+            parts = [p.strip() for p in generated.split("\n") if p.strip()]
+            acknowledgement = parts[0] if parts else "Thanks for that. "
+            transition = parts[1] + " " if len(parts) >= 2 else f"Let's continue with {transition_target}. "
         else:
-            acknowledgement = "I see the direction you were taking. "
-
-        if previous_agent and previous_agent != agent_type:
-            transition = f"Let's switch gears a bit and move into {transition_target}. "
-        else:
-            transition = f"Let's stay with {transition_target} for the next one. "
-        prefix = acknowledgement + transition
+            acknowledgement = "Thanks for that. "
+            transition = f"Let's continue with {transition_target}. "
+        prefix = f"{acknowledgement} {transition}"
 
     decorated = dict(question_pack)
     decorated["question_text"] = f"{prefix}{core_question}".strip()
     return decorated
-
-
-def _should_ask_followup(
-    question_pack: Dict[str, Any],
-    answer_text: str,
-    evaluation: Dict[str, Any],
-) -> bool:
-    if _candidate_signaled_stuck(answer_text):
-        return False
-    if question_pack.get("is_followup"):
-        return False
-    followups = question_pack.get("followup_questions", [])
-    if not followups:
-        return False
-
-    word_count = len(answer_text.split())
-    score_pct = evaluation.get("percentage", 0)
-    weak_signals = evaluation.get("topics_demonstrated_weak", [])
-    return word_count < 35 or score_pct < 65 or bool(weak_signals)
 
 
 def _build_followup_question(
@@ -822,10 +665,25 @@ def _build_followup_question(
     answer_text: str,
     supervisor_decision: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    followup_questions = previous_question_pack.get("followup_questions", [])
-    followup_text = followup_questions[0] if followup_questions else previous_question_pack.get("core_question_text", "")
-    if len(answer_text.split()) < 20:
-        followup_text = f"Can you make that more concrete? {followup_text}"
+    """Build a follow-up question using LLM, with minimal static fallback."""
+    core_q = previous_question_pack.get("core_question_text", "")
+    pct = evaluation.get("percentage", 0)
+    verdict = (evaluation.get("verdict") or "").lower()
+    weak = evaluation.get("topics_demonstrated_weak", [])
+
+    followup_text = llm_generate_text(
+        f"You are a senior interviewer. The candidate just answered this question:\n"
+        f"{core_q[:300]}\n\n"
+        f"Their answer ({len(answer_text.split())} words, scored {pct}% — {verdict}):\n"
+        f"{answer_text[:400]}\n\n"
+        f"Weak areas: {', '.join(weak) if weak else 'none identified'}\n"
+        f"Generate a SINGLE follow-up question that probes deeper. "
+        f"Return ONLY the question text.",
+        temperature=0.5,
+    )
+    if not followup_text:
+        followup_questions = previous_question_pack.get("followup_questions", [])
+        followup_text = followup_questions[0] if followup_questions else f"Could you elaborate on your approach to {core_q[:100]}?"
 
     followup_pack = dict(previous_question_pack)
     followup_pack["question_id"] = f"Q_FUP_{uuid.uuid4().hex[:6]}"
@@ -833,7 +691,7 @@ def _build_followup_question(
     followup_pack["question_text"] = followup_text
     followup_pack["is_followup"] = True
     followup_pack["parent_question_id"] = previous_question_pack.get("question_id")
-    followup_pack["followup_questions"] = followup_questions[1:]
+    followup_pack["followup_questions"] = (previous_question_pack.get("followup_questions") or [])[1:]
 
     return _decorate_question_text(
         session,
@@ -1080,17 +938,67 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
                 "answer_preview": answer_payload["answer_text"][:120],
             },
         )
-        evaluation = _evaluate_answer(agent_type, answer_payload["answer_text"], question_pack)
+        # ── Invoke the multiagent graph ──────────────────────────────
+        #   EVALUATE → SUPERVISOR → { FOLLOWUP | TECHNICAL | RESUME | HR | END }
+        graph_input = {
+            "session_id": session["session_id"],
+            "interview_config": session["interview_config"],
+            "candidate": session.get("candidate", {}),
+            "turn_counter": session["turn_counter"],
+            "turn_plan": session.get("turn_plan", []),
+            "current_agent": agent_type,
+            "current_turn_spec": current_turn_spec,
+            "coverage_context": session["coverage_context"],
+            "turns": session["turns"],
+            "answer_text": answer_payload["answer_text"],
+            "current_question_pack": question_pack,
+        }
+        result = interview_graph.invoke(graph_input)
+
+        # ── Read graph outputs ───────────────────────────────────────
+        evaluation = result.get("evaluation", {})
+        supervisor_decision = result.get("supervisor_decision", {})
+        is_over = result.get("is_interview_over", False)
+        next_question_pack = result.get("next_question_pack")
+        next_turn_spec = result.get("next_turn_spec", {})
+
         _log_event(
             session,
-            "evaluation_completed",
+            "graph_turn_completed",
             {
                 "question_id": question_pack["question_id"],
                 "agent_type": agent_type,
-                "evaluation": evaluation,
-                "followups": question_pack.get("followup_questions", []),
+                "evaluation_verdict": evaluation.get("verdict"),
+                "supervisor_action": supervisor_decision.get("action"),
+                "is_over": is_over,
             },
         )
+
+        # ── CLARIFICATION: don't burn a turn ─────────────────────────
+        if supervisor_decision.get("action") == "clarify":
+            clarification_text = supervisor_decision.get("clarification_response", "")
+            if not clarification_text:
+                core_q = question_pack.get("core_question_text", question_pack.get("question_text", ""))
+                clarification_text = f"Good question! {core_q}"
+            # Re-present the same question with the clarification answer prepended
+            clarify_pack = dict(question_pack)
+            clarify_pack["question_text"] = clarification_text
+            session["latest_question"] = clarify_pack
+            _log_event(
+                session,
+                "clarification_handled",
+                {
+                    "question_id": question_pack["question_id"],
+                    "candidate_question": answer_payload["answer_text"][:200],
+                    "clarification_response": clarification_text[:200],
+                },
+            )
+            if request_id:
+                session["request_cache"][request_id] = session["pending_turn_id"]
+            _persist_session(session)
+            return session
+
+        # ── Build turn record ────────────────────────────────────────
         turn = {
             "turn_id": session["pending_turn_id"],
             "agent_type": agent_type,
@@ -1103,69 +1011,33 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             "completed_at": _now_iso(),
         }
         session["turns"].append(turn)
+
+        # ── Update coverage ──────────────────────────────────────────
         primary_topic = question_pack.get("topic_tag")
         if not primary_topic:
             tags = question_pack.get("topic_tags", [])
             primary_topic = tags[0] if tags else ""
         session["coverage_context"]["already_asked_topics"].append(primary_topic)
 
-        if evaluation["topics_demonstrated_weak"]:
+        if evaluation.get("topics_demonstrated_weak"):
             session["coverage_context"]["weakness_tags"].extend(
                 evaluation["topics_demonstrated_weak"]
             )
-        if evaluation["topics_demonstrated_strong"]:
+        if evaluation.get("topics_demonstrated_strong"):
             session["coverage_context"]["strength_tags"].extend(
                 evaluation["topics_demonstrated_strong"]
             )
 
-        if session["turn_counter"] >= session["interview_config"]["total_turns_planned"]:
-            session["status"] = "completed"
-            session["final_scores"] = _compute_final_scores(session)
-            session["latest_question"] = None
-            session["pending_turn_id"] = None
-            if request_id:
-                session["request_cache"][request_id] = turn["turn_id"]
-            _log_event(
-                session,
-                "session_completed",
-                {"final_scores": session["final_scores"], "total_turns": len(session["turns"])},
-            )
-            _persist_session(session)
-            return session
+        # Sync avoid_topics from graph (supervisor may have added rejected topics)
+        graph_cov = result.get("coverage_context") or {}
+        graph_avoid = graph_cov.get("avoid_topics", [])
+        if graph_avoid:
+            existing_avoid = session["coverage_context"].setdefault("avoid_topics", [])
+            for topic in graph_avoid:
+                if topic not in existing_avoid:
+                    existing_avoid.append(topic)
 
-        supervisor_decision = plan_session_next_step(session, turn, evaluation)
-        if _candidate_signaled_stuck(answer_payload["answer_text"]) and supervisor_decision["action"] == "follow_up":
-            fallback_next_agent = _next_agent(session, session["turn_counter"] + 1)
-            supervisor_decision = {
-                "action": "ask_question" if fallback_next_agent == agent_type else "switch_round",
-                "next_agent": fallback_next_agent,
-                "focus": "move_on",
-                "acknowledgement": "That's okay.",
-                "transition": (
-                    "Let's leave that one and try a different question."
-                    if fallback_next_agent == agent_type
-                    else f"Let's move on and switch into {_round_label(fallback_next_agent)}."
-                ),
-                "reason": "Session safeguard prevented repeated follow-up after candidate said they were stuck.",
-            }
-        elif supervisor_decision["action"] == "follow_up" and not _should_ask_followup(
-            question_pack,
-            answer_payload["answer_text"],
-            evaluation,
-        ):
-            fallback_next_agent = _next_agent(session, session["turn_counter"] + 1)
-            supervisor_decision = {
-                "action": "ask_question" if fallback_next_agent == agent_type else "switch_round",
-                "next_agent": fallback_next_agent,
-                "focus": "coverage",
-                "acknowledgement": "Thanks, that helps.",
-                "transition": (
-                    "Let's take a fresh question in this area."
-                    if fallback_next_agent == agent_type
-                    else f"Let's switch gears and move into {_round_label(fallback_next_agent)}."
-                ),
-                "reason": "Session safeguard prevented repeated follow-up chaining on the same question thread.",
-            }
+        # ── Log supervisor decision ──────────────────────────────────
         session.setdefault("supervisor_history", []).append(
             {
                 "turn_id": turn["turn_id"],
@@ -1174,7 +1046,8 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             }
         )
 
-        if supervisor_decision["action"] == "end_interview":
+        # ── Handle interview completion ──────────────────────────────
+        if is_over:
             session["status"] = "completed"
             session["final_scores"] = _compute_final_scores(session)
             session["latest_question"] = None
@@ -1193,42 +1066,30 @@ def submit_answer(session_id: str, answer_payload: Dict[str, Any]) -> Dict[str, 
             _persist_session(session)
             return session
 
+        # ── Advance to next turn ─────────────────────────────────────
         session["turn_counter"] += 1
         session["pending_turn_id"] = f"T_{session['turn_counter']:03d}"
+        next_agent = supervisor_decision.get("next_agent", agent_type)
+        session["current_agent"] = next_agent
+        session["current_round_type"] = next_turn_spec.get(
+            "round_type", session.get("current_round_type", "tech-dsa")
+        )
+        session["current_turn_spec"] = next_turn_spec or current_turn_spec
 
-        if supervisor_decision["action"] == "follow_up":
-            session["current_agent"] = agent_type
-            session["current_round_type"] = current_turn_spec.get("round_type", session.get("current_round_type"))
-            session["current_turn_spec"] = {
-                "round_type": current_turn_spec.get("round_type", session.get("current_round_type", "tech-dsa")),
-                "agent_type": agent_type,
-                "topics": list(current_turn_spec.get("topics", [])),
-            }
-            session["latest_question"] = _build_followup_question(
-                session,
-                question_pack,
-                evaluation,
-                answer_payload["answer_text"],
-                supervisor_decision=supervisor_decision,
-            )
-        else:
-            next_turn_spec = _resolve_next_turn_spec(
-                session,
-                session["turn_counter"],
-                supervisor_decision.get("next_agent"),
-            )
-            session["current_agent"] = next_turn_spec["agent_type"]
-            session["current_round_type"] = next_turn_spec["round_type"]
-            session["current_turn_spec"] = next_turn_spec
+        if next_question_pack:
+            intro = "followup" if supervisor_decision.get("action") == "follow_up" else "transition"
             session["latest_question"] = _decorate_question_text(
                 session,
-                _generate_question_from_agent(session, session["current_agent"], next_turn_spec),
-                intro_style="transition",
+                next_question_pack,
+                intro_style=intro,
                 supervisor_decision=supervisor_decision,
                 previous_agent=agent_type,
                 evaluation=evaluation,
                 answer_text=answer_payload["answer_text"],
             )
+        else:
+            session["latest_question"] = None
+
         _log_event(
             session,
             "next_question_generated",
