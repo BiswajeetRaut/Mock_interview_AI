@@ -13,22 +13,33 @@ export const normalizeRoundType = (roundType) =>
   ROUND_TYPE_ALIASES[roundType] || roundType;
 
 export const normalizeTopicsMap = (topics = {}, selectedTypes = []) => {
-  const orderedTypes = selectedTypes.length ? selectedTypes : Object.keys(topics || {});
+  const orderedTypes = selectedTypes.length
+    ? selectedTypes
+    : Object.keys(topics || {});
   return orderedTypes.reduce((acc, roundType) => {
     const normalizedType = normalizeRoundType(roundType);
-    acc[normalizedType] = [...(topics?.[roundType] || topics?.[normalizedType] || [])];
+    acc[normalizedType] = [
+      ...(topics?.[roundType] || topics?.[normalizedType] || []),
+    ];
     return acc;
   }, {});
 };
 
-export const buildTurnDistributionFromTypes = (selectedTypes = []) => {
+export const buildTurnDistributionFromTypes = (
+  selectedTypes = [],
+  totalTurns = 8,
+) => {
   const distribution = { code: 0, resume: 0, hr: 0 };
   const normalized = selectedTypes.length ? selectedTypes : ["tech-dsa"];
 
-  normalized.forEach((roundType) => {
-    const agentType = ROUND_TYPE_TO_AGENT[normalizeRoundType(roundType)] || "code";
+  // Round-robin distribute totalTurns across the selected types,
+  // exactly matching the backend's _expand_round_sequence logic.
+  for (let i = 0; i < totalTurns; i++) {
+    const roundType = normalized[i % normalized.length];
+    const agentType =
+      ROUND_TYPE_TO_AGENT[normalizeRoundType(roundType)] || "code";
     distribution[agentType] += 1;
-  });
+  }
 
   return distribution;
 };
@@ -66,9 +77,13 @@ export const buildSessionStartPayload = async ({
   topics = {},
   candidateName = "Candidate",
 }) => {
+  const totalTurnsPlanned = 8;
   const normalizedSelectedTypes = selectedTypes.map(normalizeRoundType);
   const normalizedTopics = normalizeTopicsMap(topics, normalizedSelectedTypes);
-  const turnDistribution = buildTurnDistributionFromTypes(normalizedSelectedTypes);
+  const turnDistribution = buildTurnDistributionFromTypes(
+    normalizedSelectedTypes,
+    totalTurnsPlanned,
+  );
   const resumeData = await readResumeContent(resume, jd);
 
   return {
@@ -83,7 +98,7 @@ export const buildSessionStartPayload = async ({
     topics: normalizedTopics,
     difficulty: "medium",
     language_preference: "python",
-    total_turns_planned: 8,
+    total_turns_planned: totalTurnsPlanned,
     turn_distribution: turnDistribution,
     resume_content: {
       format: "text",

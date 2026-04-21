@@ -82,8 +82,11 @@ def session_logs(session_id: str):
     return {
         "session_id": session_id,
         "status": session.get("status"),
-        "turn_plan": session.get("turn_plan", []),
         "current_agent": session.get("current_agent"),
+        "current_difficulty": session.get("current_difficulty"),
+        "signal_confidence": session.get("signal_confidence"),
+        "supervisor_scratchpad": session.get("supervisor_scratchpad", []),
         "latest_question": session.get("latest_question"),
+        "coverage_context": session.get("coverage_context"),
         "debug_trace": session.get("debug_trace", []),
     }
