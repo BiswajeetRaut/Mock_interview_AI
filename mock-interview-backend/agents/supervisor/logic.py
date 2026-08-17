@@ -1,32 +1,23 @@
-"""Interview State Update Logic - Processes agent reports to track candidate performance.
-
-This module contains helper functions that update the interview state based on
-feedback from individual interview agents.
-"""
+"""Coverage helpers — update weakness/strength maps from evaluation results."""
 
 
-def update_state_from_report(state, report):
-    """Update weakness and strength maps based on agent report.
+def update_coverage_from_evaluation(coverage: dict, evaluation: dict) -> dict:
+    """Merge evaluation tags into coverage context. Returns updated coverage."""
+    coverage = dict(coverage)  # don't mutate original
 
-    Processes a report from an interview agent and updates the state's
-    weakness_map and strength_map with detected signals and missed opportunities.
+    weak = evaluation.get("topics_demonstrated_weak", [])
+    strong = evaluation.get("topics_demonstrated_strong", [])
 
-    Args:
-        state: Current interview state (modified in-place)
-        report: Dict containing agent feedback with 'domain', 'signals_detected',
-               and 'signals_missed' keys
-    """
-    if not report:
-        return
+    existing_weak = list(coverage.get("weakness_tags", []))
+    existing_strong = list(coverage.get("strength_tags", []))
 
-    domain = report.get("domain")
+    for tag in weak:
+        if tag not in existing_weak:
+            existing_weak.append(tag)
+    for tag in strong:
+        if tag not in existing_strong:
+            existing_strong.append(tag)
 
-    for missed in report.get("signals_missed", []):
-        state["weakness_map"].setdefault(domain, [])
-        if missed not in state["weakness_map"][domain]:
-            state["weakness_map"][domain].append(missed)
-
-    for detected in report.get("signals_detected", []):
-        state["strength_map"].setdefault(domain, [])
-        if detected not in state["strength_map"][domain]:
-            state["strength_map"][domain].append(detected)
+    coverage["weakness_tags"] = existing_weak
+    coverage["strength_tags"] = existing_strong
+    return coverage
