@@ -1,0 +1,675 @@
+<title>Interview Engine Teardown</title>
+<style>
+  /* ── Tokens: light is the base, both dark states redefine only tokens ── */
+  :root {
+    --paper:      #F4F6F6;
+    --card:       #FFFFFF;
+    --card-2:     #ECF0F0;
+    --ink:        #14191A;
+    --ink-2:      #46514F;
+    --ink-3:      #6D7A78;
+    --rule:       #D6DEDD;
+    --rule-soft:  #E5EBEA;
+    --accent:     #0B6B70;
+    --accent-2:   #0E888E;
+    --accent-wash:#E2F0F0;
+    --crit:       #A8332B;
+    --crit-wash:  #F7E4E2;
+    --warn:       #8A5A0B;
+    --warn-wash:  #F8ECD8;
+    --ok:         #2C6647;
+    --ok-wash:    #E1EFE7;
+    --shadow:     0 1px 2px rgba(20,25,26,.06), 0 8px 24px -16px rgba(20,25,26,.28);
+
+    --sans: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #0E1314;
+      --card:       #151C1D;
+      --card-2:     #1C2426;
+      --ink:        #E3EAE9;
+      --ink-2:      #A6B4B2;
+      --ink-3:      #788886;
+      --rule:       #283234;
+      --rule-soft:  #1F292A;
+      --accent:     #3FBDB4;
+      --accent-2:   #5FD6CD;
+      --accent-wash:#122A2B;
+      --crit:       #EC8078;
+      --crit-wash:  #2B1917;
+      --warn:       #D9A44F;
+      --warn-wash:  #2A2216;
+      --ok:         #6FC894;
+      --ok-wash:    #16261D;
+      --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:      #0E1314;
+    --card:       #151C1D;
+    --card-2:     #1C2426;
+    --ink:        #E3EAE9;
+    --ink-2:      #A6B4B2;
+    --ink-3:      #788886;
+    --rule:       #283234;
+    --rule-soft:  #1F292A;
+    --accent:     #3FBDB4;
+    --accent-2:   #5FD6CD;
+    --accent-wash:#122A2B;
+    --crit:       #EC8078;
+    --crit-wash:  #2B1917;
+    --warn:       #D9A44F;
+    --warn-wash:  #2A2216;
+    --ok:         #6FC894;
+    --ok-wash:    #16261D;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16.5px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 clamp(16px, 4vw, 40px) 120px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .prose { max-width: 72ch; }
+
+  /* ── Masthead ── */
+  header.mast {
+    display: flex; flex-direction: column; gap: 18px;
+    padding: clamp(48px, 8vw, 88px) 0 32px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  h1 {
+    font-size: clamp(34px, 5.6vw, 58px); line-height: 1.02; margin: 0;
+    letter-spacing: -.03em; font-weight: 700; text-wrap: balance;
+  }
+  .standfirst {
+    font-size: clamp(17px, 2vw, 20px); color: var(--ink-2); max-width: 62ch; margin: 0;
+  }
+  .meta-line {
+    display: flex; flex-wrap: wrap; gap: 8px 22px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+  }
+  .meta-line b { color: var(--ink-2); font-weight: 600; }
+
+  /* ── Verdict tiles ── */
+  .tiles {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+    margin: 36px 0 8px; border-radius: 3px; overflow: hidden;
+  }
+  .tile { background: var(--card); padding: 20px 20px 18px; display: flex; flex-direction: column; gap: 6px; }
+  .tile .k {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  .tile .v {
+    font-family: var(--mono); font-size: 30px; font-weight: 600; line-height: 1;
+    letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+  }
+  .tile .v small { font-size: 15px; font-weight: 500; color: var(--ink-3); letter-spacing: 0; }
+  .tile .n { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+  .tile.crit .v { color: var(--crit); }
+  .tile.warn .v { color: var(--warn); }
+  .tile.acc  .v { color: var(--accent); }
+
+  /* ── Sections with numbered spine ── */
+  section { padding-top: 64px; scroll-margin-top: 20px; }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 28px; }
+  .sec-num {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent);
+    letter-spacing: .1em; flex: none; padding-top: 4px;
+  }
+  h2 { font-size: clamp(24px, 3.2vw, 32px); margin: 0; letter-spacing: -.022em; font-weight: 700; line-height: 1.15; text-wrap: balance; }
+  h3 {
+    font-size: 18px; margin: 40px 0 12px; letter-spacing: -.012em; font-weight: 700;
+  }
+  h4 {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--ink-3); margin: 32px 0 10px; font-weight: 600;
+  }
+  p { margin: 0 0 16px; }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+  strong { font-weight: 650; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  code {
+    font-family: var(--mono); font-size: .865em; background: var(--card-2);
+    padding: .12em .38em; border-radius: 3px; color: var(--ink);
+    border: 1px solid var(--rule-soft);
+  }
+
+  /* ── Tables ── */
+  .tbl-wrap { overflow-x: auto; margin: 20px 0 28px; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 620px; }
+  th {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase;
+    color: var(--ink-3); text-align: left; padding: 12px 14px; font-weight: 600;
+    border-bottom: 1px solid var(--rule); background: var(--card-2); white-space: nowrap;
+  }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; color: var(--ink-2); }
+  tr:last-child td { border-bottom: none; }
+  td strong, td b { color: var(--ink); font-weight: 620; }
+  td code { font-size: 12.5px; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--ink); }
+
+  /* ── Severity chips ── */
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: .09em;
+    text-transform: uppercase; font-weight: 650; padding: 3px 7px; border-radius: 3px; white-space: nowrap;
+  }
+  .chip.c1 { background: var(--crit-wash); color: var(--crit); border: 1px solid var(--crit); }
+  .chip.c2 { background: var(--warn-wash); color: var(--warn); border: 1px solid var(--warn); }
+  .chip.c3 { background: var(--card-2); color: var(--ink-3); border: 1px solid var(--rule); }
+  .chip.ok { background: var(--ok-wash); color: var(--ok); border: 1px solid var(--ok); }
+
+  /* ── Callout ── */
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--accent-wash);
+    padding: 18px 22px; margin: 24px 0; border-radius: 0 3px 3px 0;
+  }
+  .callout.danger { border-left-color: var(--crit); background: var(--crit-wash); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .lbl {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase;
+    font-weight: 650; color: var(--accent); display: block; margin-bottom: 6px;
+  }
+  .callout.danger .lbl { color: var(--crit); }
+
+  /* ── Diagram frame ── */
+  .fig { margin: 28px 0 32px; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); overflow: hidden; }
+  .fig .cap {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase;
+    color: var(--ink-3); padding: 11px 16px; border-bottom: 1px solid var(--rule); background: var(--card-2); font-weight: 600;
+  }
+  .fig .body { overflow-x: auto; padding: 24px 16px; }
+  pre.mermaid { background: transparent; margin: 0; text-align: center; }
+
+  /* ── Math block ── */
+  .math {
+    font-family: var(--mono); font-size: 13.5px; line-height: 1.9; background: var(--card);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 18px 20px; margin: 20px 0 28px;
+    overflow-x: auto; font-variant-numeric: tabular-nums; color: var(--ink-2);
+  }
+  .math .r { color: var(--ink); font-weight: 600; }
+  .math .c { color: var(--ink-3); }
+
+  /* ── Path badge ── */
+  .path {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: var(--accent-wash); padding: 2px 6px; border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+
+  hr.rule { border: none; border-top: 1px solid var(--rule); margin: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Current-State Teardown · Phase 1 Baseline</div>
+  <h1>Interview Engine Teardown</h1>
+  <p class="standfirst">How the Mock Interview AI platform is built today, where every request actually spends its time, and the precise arithmetic that tells us what it can and cannot carry.</p>
+  <div class="meta-line">
+    <span><b>Repo</b> Mock_interview_AI @ main</span>
+    <span><b>Backend</b> 3.2k LOC Python</span>
+    <span><b>Frontend</b> 4.5k LOC React</span>
+    <span><b>Dated</b> 17 Aug 2026</span>
+  </div>
+</header>
+
+<div class="tiles">
+  <div class="tile crit">
+    <div class="k">Max replicas</div>
+    <div class="v">1</div>
+    <div class="n">Graph state lives in process RAM. A second pod breaks every in-flight interview.</div>
+  </div>
+  <div class="tile warn">
+    <div class="k">Concurrent turns</div>
+    <div class="v">~40</div>
+    <div class="n">Sync endpoints on the default AnyIO threadpool. Hard ceiling per process.</div>
+  </div>
+  <div class="tile acc">
+    <div class="k">LLM calls / interview</div>
+    <div class="v">~48</div>
+    <div class="n">5 to start, 3–6 per turn, 1 to close. All sequential, all inside the request.</div>
+  </div>
+  <div class="tile crit">
+    <div class="k">Release blockers</div>
+    <div class="v">6 <small>critical</small></div>
+    <div class="n">Unsandboxed RCE, no session authz, unbounded memory, no CI, no tests, no container.</div>
+  </div>
+</div>
+
+<p class="prose" style="margin-top:22px; color:var(--ink-3); font-size:14px;">
+  Every number on this page is derived in <a href="#s4">§4</a> from the code as it stands, with assumptions stated. Nothing here is a benchmark — the system has never been load tested. That is itself a finding.
+</p>
+
+<!-- ══════════════════════════════════════ 1 ══ -->
+<section id="s1">
+  <div class="sec-head"><span class="sec-num">01</span><h2>What the system is</h2></div>
+
+  <div class="prose">
+    <p>A single-page React app drives a voice-first mock interview. The candidate configures a session (company, role, rounds, topics, optional resume), then a FastAPI backend runs an <strong>agentic LangGraph loop</strong> that generates a question, waits for the answer, scores it, and reasons about what to ask next. Speech-to-text and text-to-speech both run <em>in the browser</em> — the Web Speech API and <code>speak-tts</code> — so no audio ever touches the server. That is a genuinely good architectural accident and worth preserving.</p>
+
+    <p>The whole thing is one Python process holding all state in module-level dicts, one Vite dev server, and one Groq API key. There is no container, no CI, no test, no migration, no metric, and no log aggregation. It is a well-structured prototype, not a deployable service — and it should be read that way.</p>
+  </div>
+
+  <div class="fig">
+    <div class="cap">Figure 1 — Current topology, as deployed</div>
+    <div class="body">
+<pre class="mermaid">
+flowchart LR
+  subgraph B["Browser — all speech runs here"]
+    UI["React SPA (Vite dev)"]
+    STT["Web Speech API<br/>speech → text"]
+    TTS["speak-tts<br/>text → speech"]
+  end
+
+  subgraph P["Single Python process — uvicorn, 1 worker"]
+    API["FastAPI routers<br/>sync def handlers"]
+    ENG["session_engine"]
+    GRAPH["LangGraph app<br/>compiled once at import"]
+    MS[("MemorySaver<br/>checkpointer — RAM")]
+    DICT[("SESSION_STORE<br/>THREAD_STORE — RAM")]
+    SUB["subprocess.run<br/>python / node"]
+  end
+
+  GROQ["Groq API<br/>llama-3.1-8b-instant"]
+  FB["Firebase Auth<br/>+ Firestore"]
+
+  UI -->|"axios → 127.0.0.1:8000"| API
+  STT --> UI
+  UI --> TTS
+  API --> ENG --> GRAPH
+  GRAPH <--> MS
+  ENG <--> DICT
+  GRAPH -->|"5–6 blocking calls per turn"| GROQ
+  API -->|"/coding/run"| SUB
+  API -->|"/auth/google"| FB
+</pre>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="lbl">The load-bearing detail</span>
+    <p>Both state stores are Python dicts inside the process, and the LangGraph checkpointer is <code>MemorySaver()</code>. The <code>REDIS_URL</code> path in <span class="path">session_engine.py</span> only externalises the <em>session summary</em> dict — the actual graph checkpoint that <code>Command(resume=…)</code> needs is still RAM-only. So even with Redis configured, a session is pinned to the process that created it.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════ 2 ══ -->
+<section id="s2">
+  <div class="sec-head"><span class="sec-num">02</span><h2>Component inventory</h2></div>
+
+  <div class="prose">
+    <p>Everything in the backend, what it holds, and how it behaves under horizontal scale. The <strong>Scale class</strong> column is the one that matters for Phase 2 planning.</p>
+  </div>
+
+  <h4>Backend</h4>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Component</th><th>File</th><th>Responsibility</th><th>State held</th><th>Scale class</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>App bootstrap</strong></td><td><code>main.py</code></td>
+        <td>Mounts 5 routers, CORS middleware.</td><td>None</td>
+        <td><span class="chip ok">Stateless</span></td>
+      </tr>
+      <tr>
+        <td><strong>Session engine</strong></td><td><code>services/session_engine.py</code></td>
+        <td>Start / resume / end lifecycle, resume parsing, final scoring. A thin wrapper — the brain moved into the graph.</td>
+        <td><code>SESSION_STORE</code>, <code>THREAD_STORE</code> module dicts</td>
+        <td><span class="chip c1">Process-pinned</span></td>
+      </tr>
+      <tr>
+        <td><strong>Interview graph</strong></td><td><code>agents/supervisor/graph.py</code></td>
+        <td>10-node looping LangGraph with a human-in-the-loop <code>interrupt()</code> at <code>WAIT_FOR_ANSWER</code>.</td>
+        <td><code>MemorySaver</code> — every checkpoint, never evicted</td>
+        <td><span class="chip c1">Process-pinned</span></td>
+      </tr>
+      <tr>
+        <td><strong>Supervisor</strong></td><td><code>agents/supervisor/node.py</code></td>
+        <td>The routing brain. One LLM reasoning call per turn decides agent, difficulty, follow-up vs. move-on, and when to end. Post-hoc consistency checks correct the LLM.</td>
+        <td>Scratchpad in graph state</td>
+        <td><span class="chip ok">Stateless</span></td>
+      </tr>
+      <tr>
+        <td><strong>Evaluator</strong></td><td><code>agents/evaluator/node.py</code></td>
+        <td>Scores each answer against the question's rubric. Word-count heuristic fallback when the LLM is unavailable.</td>
+        <td>None</td>
+        <td><span class="chip ok">Stateless</span></td>
+      </tr>
+      <tr>
+        <td><strong>Question agents</strong> ×3</td><td><code>agents/{technical_coding,resume_based,manegerial}/node.py</code></td>
+        <td>Each runs a 3-step chain: <em>reason → generate → self-critique</em>, plus a conditional retry. Produces a question pack with rubric and test cases.</td>
+        <td>None</td>
+        <td><span class="chip ok">Stateless</span></td>
+      </tr>
+      <tr>
+        <td><strong>Coding runner</strong></td><td><code>routers/coding.py</code></td>
+        <td>Writes candidate code to a temp file and shells out to <code>python</code> / <code>node</code> with an 8s timeout.</td>
+        <td>Temp dir per call</td>
+        <td><span class="chip c1">Unsafe</span></td>
+      </tr>
+      <tr>
+        <td><strong>Auth</strong></td><td><code>deps.py</code>, <code>routers/auth.py</code></td>
+        <td>Verifies a Firebase ID token, upserts the user into Firestore. <em>Applied to <code>/auth/google</code> only.</em></td>
+        <td>None</td>
+        <td><span class="chip ok">Stateless</span></td>
+      </tr>
+      <tr>
+        <td><strong>Firestore init</strong></td><td><code>firebase_admin_init.py</code></td>
+        <td>Real client if <code>serviceAccountKey.json</code> exists — otherwise silently falls back to an in-memory mock.</td>
+        <td>Mock store dict</td>
+        <td><span class="chip c2">Silent fallback</span></td>
+      </tr>
+      <tr>
+        <td><strong>Demo interview API</strong></td><td><code>routers/interview.py</code>, <code>data/interviews.py</code></td>
+        <td>Legacy mock endpoints backed by a module dict. Superseded by <code>/session/*</code>.</td>
+        <td><code>DEMO_INTERVIEWS</code> dict</td>
+        <td><span class="chip c3">Dead weight</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Frontend</h4>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Component</th><th>File</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Interview page</strong></td><td><code>src/pages/InterviewPage.jsx</code></td><td>1,147 lines. Owns the mic, the TTS queue, the transcript, the timer, the coding panel, and every session API call. The single biggest refactor target on the client.</td></tr>
+      <tr><td><strong>Coding playground</strong></td><td><code>src/components/CodingPlayground.jsx</code></td><td>Monaco editor, calls <code>/coding/run</code> then submits a summary string as the answer.</td></tr>
+      <tr><td><strong>API client</strong></td><td><code>src/api/client.js</code></td><td>axios instance with <code>baseURL</code> hardcoded to <code>http://127.0.0.1:8000</code>. No auth header, no retry, no timeout.</td></tr>
+      <tr><td><strong>Auth context</strong></td><td><code>src/context/AuthContext.jsx</code></td><td>Firebase web SDK, Google sign-in. The resulting ID token is never attached to session requests.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════ 3 ══ -->
+<section id="s3">
+  <div class="sec-head"><span class="sec-num">03</span><h2>The turn — where time actually goes</h2></div>
+
+  <div class="prose">
+    <p>One "turn" is the unit of work: candidate answers, server responds with the next question. Understanding this path is understanding the whole load model, because <strong>every LLM call in the chain happens inside the HTTP request, sequentially, while a thread is held.</strong></p>
+  </div>
+
+  <div class="fig">
+    <div class="cap">Figure 2 — POST /session/{id}/answer, new-question path</div>
+    <div class="body">
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Browser
+  participant A as FastAPI (thread held)
+  participant G as LangGraph
+  participant L as Groq
+
+  C->>A: POST /answer {answer_text}
+  A->>A: locked = true; persist
+  A->>G: invoke(Command(resume=...))
+  G->>L: EVALUATE — score vs rubric
+  L-->>G: scores JSON
+  G->>L: SUPERVISOR — route / difficulty / end?
+  L-->>G: decision JSON
+  G->>L: agent step 1 — reason about topic
+  L-->>G: topic + angle
+  G->>L: agent step 2 — generate question pack
+  L-->>G: question pack
+  G->>L: agent step 3 — self-critique
+  L-->>G: verdict (may trigger a 4th retry call)
+  G->>G: DECORATE — prepend prefix
+  G-->>A: interrupt at WAIT_FOR_ANSWER
+  A->>A: locked = false; persist
+  A-->>C: full session object + next question
+</pre>
+    </div>
+  </div>
+
+  <h3>LLM call accounting</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Operation</th><th>Calls made</th><th class="num">Count</th><th class="num">Typical wall time</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /session/start</code></td><td>Resume parse, agent reason + generate + critique, opening greeting</td><td class="num">5</td><td class="num">2.5 – 5 s</td></tr>
+      <tr><td><code>/answer</code> — new question</td><td>Evaluate, supervise, agent ×3 (+1 conditional retry)</td><td class="num">5 – 6</td><td class="num">2.5 – 6 s</td></tr>
+      <tr><td><code>/answer</code> — follow-up</td><td>Evaluate, supervise, follow-up generate</td><td class="num">3</td><td class="num">1.5 – 3 s</td></tr>
+      <tr><td><code>/answer</code> — clarification</td><td>Evaluate, supervise, clarification response</td><td class="num">3</td><td class="num">1.5 – 3 s</td></tr>
+      <tr><td><code>/answer</code> — final turn</td><td>Evaluate, supervise, closing message</td><td class="num">3</td><td class="num">1.5 – 3 s</td></tr>
+      <tr><td><strong>Full 8-turn interview</strong></td><td></td><td class="num"><strong>~48</strong></td><td class="num"><strong>~35 s</strong></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout danger">
+    <span class="lbl">Tail risk is severe</span>
+    <p><code>build_llm()</code> in <span class="path">agents/shared.py</span> sets <code>timeout=8, max_retries=0</code>. A turn chains up to six of these. If Groq is degraded, a single turn can hold its thread for <strong>48 seconds</strong> before every stage silently falls through to a heuristic and returns a low-quality question. There is no circuit breaker, no bulkhead, and no signal to the client that quality was degraded — the user just gets a worse interview and never knows why.</p>
+  </div>
+
+  <h3>Two behaviours worth calling out</h3>
+  <div class="prose">
+    <ul>
+      <li><strong>A new <code>ChatGroq</code> client is constructed per call.</strong> <code>build_llm()</code> is invoked fresh at each of the ~48 sites. That means no connection pooling and repeated client setup on the hot path.</li>
+      <li><strong>Exceptions are swallowed at nearly every layer.</strong> <code>start_session</code> catches graph failures into a discarded variable; <code>submit_answer</code> wraps <code>invoke</code> in <code>except Exception: pass</code>; each agent step falls back silently. The system is resilient in the sense that it never 500s — and unobservable in the sense that you cannot tell a healthy turn from a totally failed one.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════ 4 ══ -->
+<section id="s4">
+  <div class="sec-head"><span class="sec-num">04</span><h2>Load model and saturation math</h2></div>
+
+  <div class="prose">
+    <p>Three independent ceilings. The lowest one wins, and today they are very far apart — which tells us exactly what to fix first.</p>
+  </div>
+
+  <h3>Ceiling A — the threadpool</h3>
+  <div class="prose">
+    <p>Every route handler is declared <code>def</code>, not <code>async def</code>. FastAPI therefore runs each in Starlette's AnyIO worker threadpool, which defaults to <strong>40 threads</strong>. A turn holds its thread for the entire LLM chain.</p>
+  </div>
+  <div class="math">
+<span class="c">// per process, single uvicorn worker</span><br>
+threads            = 40<br>
+turn_hold_time     = 4 s <span class="c">(typical)</span><br>
+<span class="r">peak_turn_throughput = 40 / 4 = 10 turns/sec</span><br>
+<span class="c">// but a candidate is idle ~60s between turns, so:</span><br>
+duty_cycle         = 4 / 64 ≈ 0.0625<br>
+<span class="r">concurrent_interviews ≈ 40 / 0.0625 ≈ 640</span>
+  </div>
+  <p class="prose">640 concurrent interviews looks survivable — until you notice it assumes perfectly smooth arrivals. Real traffic is bursty, and the moment 41 candidates submit within the same 4-second window, request 41 queues behind a thread rather than failing fast. There is no queue-depth metric to see it happen.</p>
+
+  <h3>Ceiling B — memory, and it is unbounded</h3>
+  <div class="prose">
+    <p>This is the one that actually kills the process. <code>MemorySaver</code> retains <em>a full state snapshot per graph super-step</em>, and nothing ever evicts it. <code>SESSION_STORE</code> and <code>THREAD_STORE</code> also grow forever — <code>SESSION_TTL_SECONDS</code> is only honoured on the Redis path.</p>
+  </div>
+  <div class="math">
+state per turn     ≈ 20 KB <span class="c">(question pack + answer + evaluation)</span><br>
+super-steps/turn   ≈ 5 <span class="c">(EVALUATE → SUPERVISOR → AGENT → DECORATE → WAIT)</span><br>
+turns              = 8<br>
+<span class="c">// checkpoints accumulate the whole growing state each step</span><br>
+<span class="r">≈ 3 – 6 MB retained per completed interview, permanently</span><br>
+<br>
+<span class="r">10,000 interviews → 30 – 60 GB → OOMKilled</span>
+  </div>
+  <div class="callout danger">
+    <span class="lbl">Read this as a leak, not a capacity number</span>
+    <p>The process does not degrade at some session count — it grows monotonically until the kernel kills it, and every in-flight interview on that pod is lost with no recovery path. At current usage this is invisible. At any real traffic it is a multi-hour-MTTR incident.</p>
+  </div>
+
+  <h3>Ceiling C — the LLM provider, which is the real wall</h3>
+  <div class="prose">
+    <p>This is the ceiling that governs Phase 2 and Phase 3, and it is not an infrastructure problem — it is a provider-quota and unit-economics problem.</p>
+  </div>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Target</th><th class="num">Concurrent<br>interviews</th><th class="num">Turns/sec</th><th class="num">LLM calls/sec</th><th class="num">Required RPM</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Today</td><td class="num">~10</td><td class="num">0.16</td><td class="num">0.8</td><td class="num">50</td><td><span class="chip ok">Fits a dev key</span></td></tr>
+      <tr><td><strong>Phase 2</strong> — 1 lakh users</td><td class="num">10,000</td><td class="num">167</td><td class="num">833</td><td class="num">50,000</td><td><span class="chip c1">Far beyond one key</span></td></tr>
+      <tr><td><strong>Phase 3</strong> — 10M users</td><td class="num">1,000,000</td><td class="num">16,667</td><td class="num">83,333</td><td class="num">5,000,000</td><td><span class="chip c1">Needs owned inference</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="prose" style="font-size:14px; color:var(--ink-3);">Assumes 5 LLM calls per turn and one turn per candidate per 60 seconds. Both are directly measurable from <a href="#s3">§3</a>.</p>
+
+  <h4>The economics, which are counter-intuitive</h4>
+  <div class="math">
+tokens per call    ≈ 1,500 in + 400 out<br>
+calls per interview = 48<br>
+<span class="r">≈ 91 K tokens per interview</span><br>
+<br>
+<span class="c">// at ~$0.05/M in, $0.08/M out for an 8B-class model</span><br>
+<span class="r">cost per interview ≈ $0.006</span><br>
+300,000 interviews <span class="c">(1 lakh users × 3)</span> <span class="r">≈ $1,800 total</span><br>
+<br>
+<span class="c">// but at sustained peak:</span><br>
+833 calls/s × 1,900 tok <span class="r">≈ 1.6 M tokens/sec ≈ $340/hour</span>
+  </div>
+  <div class="callout">
+    <span class="lbl">The finding that should shape Phase 2</span>
+    <p><strong>Total volume is cheap. Peak concurrency is the wall.</strong> Serving a lakh of users costs under two thousand dollars in inference — but doing it inside a 3-hour evening peak requires 50,000 requests per minute against a provider, which no single account will grant. The Phase 2 design problem is therefore <em>call reduction and concurrency shaping</em>, not raw compute. Cutting 5 calls per turn to 2 is worth more than tripling the pod count.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════ 5 ══ -->
+<section id="s5">
+  <div class="sec-head"><span class="sec-num">05</span><h2>Blocking issues</h2></div>
+
+  <div class="prose">
+    <p>Ranked by what would hurt most on the day we put this in front of real users. The first four are hard blockers for <em>any</em> public deployment, regardless of scale.</p>
+  </div>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>#</th><th>Severity</th><th>Issue</th><th>Where</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="num">1</td><td><span class="chip c1">Critical</span></td>
+        <td><strong>Unsandboxed remote code execution</strong> — <code>/coding/run</code> writes candidate code into a harness and shells out to <code>python</code>/<code>node</code> with no jail, no seccomp, no user isolation, no memory or CPU limit, and no authentication.</td>
+        <td><span class="path">routers/coding.py:50</span></td>
+        <td>Any anonymous caller gets arbitrary code execution as the app user — reads <code>.env</code>, exfiltrates <code>GROQ_API_KEY</code> and <code>serviceAccountKey.json</code>, pivots into the cluster. The 8s timeout does not contain a fork bomb.</td>
+      </tr>
+      <tr>
+        <td class="num">2</td><td><span class="chip c1">Critical</span></td>
+        <td><strong>No authorization on session endpoints</strong> — <code>/session/{id}/state</code>, <code>/report</code>, <code>/logs</code>, <code>/answer</code> take a session ID and nothing else.</td>
+        <td><span class="path">routers/session.py</span></td>
+        <td>Any known ID exposes another candidate's resume, transcript, and scores, and lets a third party inject answers into a live interview. <code>get_current_user</code> exists but is wired only to <code>/auth/google</code>.</td>
+      </tr>
+      <tr>
+        <td class="num">3</td><td><span class="chip c1">Critical</span></td>
+        <td><strong>Single-replica lock-in</strong> — <code>MemorySaver</code> plus module-level dicts.</td>
+        <td><span class="path">agents/supervisor/graph.py:377</span></td>
+        <td>Horizontal scaling is impossible, not merely difficult. Any restart, deploy, or crash destroys every active interview.</td>
+      </tr>
+      <tr>
+        <td class="num">4</td><td><span class="chip c1">Critical</span></td>
+        <td><strong>Unbounded memory growth</strong> — no eviction on checkpoints or session dicts.</td>
+        <td><span class="path">services/session_engine.py:47</span></td>
+        <td>Guaranteed OOM. Timing depends only on traffic. See <a href="#s4">§4 Ceiling B</a>.</td>
+      </tr>
+      <tr>
+        <td class="num">5</td><td><span class="chip c2">High</span></td>
+        <td><strong>SSRF in resume ingestion</strong> — <code>urlopen</code> on a caller-supplied URL with no scheme or host allowlist.</td>
+        <td><span class="path">services/session_engine.py:115</span></td>
+        <td>Reaches cloud metadata endpoints and internal services from inside the VPC. Especially dangerous on a node with an instance role attached.</td>
+      </tr>
+      <tr>
+        <td class="num">6</td><td><span class="chip c2">High</span></td>
+        <td><strong>CORS is <code>allow_origins=["*"]</code> with <code>allow_credentials=True</code></strong>.</td>
+        <td><span class="path">main.py:11</span></td>
+        <td>An invalid combination that browsers reject inconsistently. Signals no origin policy exists.</td>
+      </tr>
+      <tr>
+        <td class="num">7</td><td><span class="chip c2">High</span></td>
+        <td><strong>The session lock is not atomic</strong> — <code>if session.get("locked")</code> then set, read-modify-write on a plain dict.</td>
+        <td><span class="path">routers/session.py:24</span></td>
+        <td>Two concurrent answers for one session both pass the check and corrupt graph state. Rare today, systematic once retries exist.</td>
+      </tr>
+      <tr>
+        <td class="num">8</td><td><span class="chip c2">High</span></td>
+        <td><strong>Zero observability</strong> — no structured logs, metrics, traces, or health endpoint. Errors are <code>print()</code> or swallowed.</td>
+        <td>Everywhere</td>
+        <td>No way to detect that LLM quality has silently degraded to heuristic fallback across the whole fleet.</td>
+      </tr>
+      <tr>
+        <td class="num">9</td><td><span class="chip c2">High</span></td>
+        <td><strong>No tests, no CI, no container, no manifests.</strong></td>
+        <td>Repo root</td>
+        <td>Nothing can be safely changed, and there is no artifact to deploy. Blocks every later phase.</td>
+      </tr>
+      <tr>
+        <td class="num">10</td><td><span class="chip c3">Medium</span></td>
+        <td><strong>Silent Firestore mock</strong> — missing credentials fall back to an in-memory store with no warning.</td>
+        <td><span class="path">firebase_admin_init.py:55</span></td>
+        <td>A misconfigured production deploy appears healthy while writing every user record into a dict that vanishes on restart.</td>
+      </tr>
+      <tr>
+        <td class="num">11</td><td><span class="chip c3">Medium</span></td>
+        <td><strong>Hardcoded API base URL</strong> — <code>127.0.0.1:8000</code> in the axios client.</td>
+        <td><span class="path">src/api/client.js:4</span></td>
+        <td>The frontend cannot be deployed anywhere as-is.</td>
+      </tr>
+      <tr>
+        <td class="num">12</td><td><span class="chip c3">Medium</span></td>
+        <td><strong>No rate limiting or abuse control</strong> on any endpoint.</td>
+        <td>All routers</td>
+        <td>One script drains the Groq quota for every user, and the bill, in minutes.</td>
+      </tr>
+      <tr>
+        <td class="num">13</td><td><span class="chip c3">Medium</span></td>
+        <td><strong>No durable record of a completed interview.</strong> Reports are computed from RAM and lost on restart.</td>
+        <td><span class="path">routers/session.py:51</span></td>
+        <td>Results, the actual product value, are the least durable thing in the system.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout">
+    <span class="lbl">Credit where due</span>
+    <p>Secrets are correctly gitignored and none are committed. Browser-side speech keeps audio off the server entirely, which removes an enormous class of bandwidth and compliance problems that most competitors carry. The agent layer is cleanly separated — prompts, nodes, and state live apart, and the graph is genuinely stateless logic. <strong>The domain design is sound; the runtime foundation is what's missing.</strong> That is the good version of this problem to have.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════ 6 ══ -->
+<section id="s6">
+  <div class="sec-head"><span class="sec-num">06</span><h2>What this implies for Phase 2</h2></div>
+
+  <div class="prose">
+    <p>Not a design — the design comes out of our discussion. These are the constraints any Phase 2 proposal has to satisfy, derived from the sections above.</p>
+
+    <ol>
+      <li><strong>Externalise graph state before anything else.</strong> Every other scaling move is blocked on replacing <code>MemorySaver</code> with a shared checkpointer. This is the keystone task.</li>
+      <li><strong>Get the LLM chain out of the request path, or shorten it.</strong> 5–6 sequential calls per turn is the cost driver, the latency driver, and the provider-quota driver simultaneously. It is the highest-leverage single change in the system.</li>
+      <li><strong>The coding runner has to move out of the API process.</strong> It cannot be secured in place — it needs a different execution substrate entirely.</li>
+      <li><strong>Authorization must bind sessions to users</strong> before any public traffic, and the token the frontend already holds must start being sent.</li>
+      <li><strong>Ship the pipeline before the features.</strong> Container, tests, CI, and manifests are prerequisites for changing anything else safely — not follow-up work.</li>
+      <li><strong>Instrument first, then load test.</strong> We cannot validate Phase 2 against Phase 3 targets without metrics, and we currently have none.</li>
+    </ol>
+
+    <p style="margin-top:28px; padding-top:24px; border-top:1px solid var(--rule); color:var(--ink-3); font-size:14px;">The open questions — sync versus async turn delivery, checkpointer choice, sandbox substrate, how far to cut the agent chain, and what we are willing to trade for cost — are decisions for the team, not conclusions of this document.</p>
+  </div>
+</section>
+
+</div>

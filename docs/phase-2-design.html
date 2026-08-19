@@ -1,0 +1,706 @@
+<title>Phase 2 Scaling Plan</title>
+<style>
+  :root {
+    --paper:#F4F6F6; --card:#FFFFFF; --card-2:#ECF0F0;
+    --ink:#14191A; --ink-2:#46514F; --ink-3:#6D7A78;
+    --rule:#D6DEDD; --rule-soft:#E5EBEA;
+    --accent:#0B6B70; --accent-2:#0E888E; --accent-wash:#E2F0F0;
+    --crit:#A8332B; --crit-wash:#F7E4E2;
+    --warn:#8A5A0B; --warn-wash:#F8ECD8;
+    --ok:#2C6647;  --ok-wash:#E1EFE7;
+    --sans:"Avenir Next","Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0E1314; --card:#151C1D; --card-2:#1C2426;
+      --ink:#E3EAE9; --ink-2:#A6B4B2; --ink-3:#788886;
+      --rule:#283234; --rule-soft:#1F292A;
+      --accent:#3FBDB4; --accent-2:#5FD6CD; --accent-wash:#122A2B;
+      --crit:#EC8078; --crit-wash:#2B1917;
+      --warn:#D9A44F; --warn-wash:#2A2216;
+      --ok:#6FC894;  --ok-wash:#16261D;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0E1314; --card:#151C1D; --card-2:#1C2426;
+    --ink:#E3EAE9; --ink-2:#A6B4B2; --ink-3:#788886;
+    --rule:#283234; --rule-soft:#1F292A;
+    --accent:#3FBDB4; --accent-2:#5FD6CD; --accent-wash:#122A2B;
+    --crit:#EC8078; --crit-wash:#2B1917;
+    --warn:#D9A44F; --warn-wash:#2A2216;
+    --ok:#6FC894;  --ok-wash:#16261D;
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:16.5px; line-height:1.65; margin:0;
+    padding:0 clamp(16px,4vw,40px) 120px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1080px; margin:0 auto; }
+  .prose { max-width:72ch; }
+
+  header.mast {
+    display:flex; flex-direction:column; gap:18px;
+    padding:clamp(48px,8vw,88px) 0 32px; border-bottom:2px solid var(--ink);
+  }
+  .eyebrow { font-family:var(--mono); font-size:11.5px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; }
+  h1 { font-size:clamp(34px,5.6vw,58px); line-height:1.02; margin:0;
+    letter-spacing:-.03em; font-weight:700; text-wrap:balance; }
+  .standfirst { font-size:clamp(17px,2vw,20px); color:var(--ink-2); max-width:62ch; margin:0; }
+  .meta-line { display:flex; flex-wrap:wrap; gap:8px 22px;
+    font-family:var(--mono); font-size:12px; color:var(--ink-3); }
+  .meta-line b { color:var(--ink-2); font-weight:600; }
+
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:1px; background:var(--rule); border:1px solid var(--rule);
+    margin:36px 0 8px; border-radius:3px; overflow:hidden; }
+  .tile { background:var(--card); padding:20px; display:flex; flex-direction:column; gap:6px; }
+  .tile .k { font-family:var(--mono); font-size:10.5px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-3); }
+  .tile .v { font-family:var(--mono); font-size:30px; font-weight:600; line-height:1;
+    letter-spacing:-.02em; font-variant-numeric:tabular-nums; color:var(--accent); }
+  .tile .v small { font-size:15px; font-weight:500; color:var(--ink-3); letter-spacing:0; }
+  .tile .n { font-size:13px; color:var(--ink-2); line-height:1.45; }
+
+  section { padding-top:64px; scroll-margin-top:20px; }
+  .sec-head { display:flex; align-items:baseline; gap:16px; border-bottom:1px solid var(--rule);
+    padding-bottom:12px; margin-bottom:28px; }
+  .sec-num { font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+    letter-spacing:.1em; flex:none; padding-top:4px; }
+  h2 { font-size:clamp(24px,3.2vw,32px); margin:0; letter-spacing:-.022em;
+    font-weight:700; line-height:1.15; text-wrap:balance; }
+  h3 { font-size:18px; margin:40px 0 12px; letter-spacing:-.012em; font-weight:700; }
+  h4 { font-family:var(--mono); font-size:11.5px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--ink-3); margin:32px 0 10px; font-weight:600; }
+  p { margin:0 0 16px; }
+  ul, ol { margin:0 0 16px; padding-left:22px; }
+  li { margin-bottom:7px; }
+  strong { font-weight:650; }
+  a { color:var(--accent); text-underline-offset:2px; }
+  a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; }
+  code { font-family:var(--mono); font-size:.865em; background:var(--card-2);
+    padding:.12em .38em; border-radius:3px; color:var(--ink); border:1px solid var(--rule-soft); }
+
+  .tbl-wrap { overflow-x:auto; margin:20px 0 28px; border:1px solid var(--rule);
+    border-radius:3px; background:var(--card); }
+  table { border-collapse:collapse; width:100%; font-size:14px; min-width:620px; }
+  th { font-family:var(--mono); font-size:10.5px; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--ink-3); text-align:left; padding:12px 14px; font-weight:600;
+    border-bottom:1px solid var(--rule); background:var(--card-2); white-space:nowrap; }
+  td { padding:12px 14px; border-bottom:1px solid var(--rule-soft); vertical-align:top; color:var(--ink-2); }
+  tr:last-child td { border-bottom:none; }
+  td strong, td b { color:var(--ink); font-weight:620; }
+  td code { font-size:12.5px; }
+  .num { font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right;
+    white-space:nowrap; color:var(--ink); }
+
+  .chip { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.09em;
+    text-transform:uppercase; font-weight:650; padding:3px 7px; border-radius:3px; white-space:nowrap; }
+  .chip.a { background:var(--accent-wash); color:var(--accent); border:1px solid var(--accent); }
+  .chip.b { background:var(--warn-wash); color:var(--warn); border:1px solid var(--warn); }
+  .chip.c { background:var(--card-2); color:var(--ink-3); border:1px solid var(--rule); }
+  .chip.ok { background:var(--ok-wash); color:var(--ok); border:1px solid var(--ok); }
+  .chip.no { background:var(--crit-wash); color:var(--crit); border:1px solid var(--crit); }
+
+  .callout { border-left:3px solid var(--accent); background:var(--accent-wash);
+    padding:18px 22px; margin:24px 0; border-radius:0 3px 3px 0; }
+  .callout.danger { border-left-color:var(--crit); background:var(--crit-wash); }
+  .callout p:last-child { margin-bottom:0; }
+  .callout .lbl { font-family:var(--mono); font-size:10.5px; letter-spacing:.13em;
+    text-transform:uppercase; font-weight:650; color:var(--accent); display:block; margin-bottom:6px; }
+  .callout.danger .lbl { color:var(--crit); }
+
+  .fig { margin:28px 0 32px; border:1px solid var(--rule); border-radius:3px;
+    background:var(--card); overflow:hidden; }
+  .fig .cap { font-family:var(--mono); font-size:10.5px; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--ink-3); padding:11px 16px; border-bottom:1px solid var(--rule);
+    background:var(--card-2); font-weight:600; }
+  .fig .body { overflow-x:auto; padding:24px 16px; }
+  pre.mermaid { background:transparent; margin:0; text-align:center; }
+
+  pre.code {
+    font-family:var(--mono); font-size:12.5px; line-height:1.7; background:var(--card);
+    border:1px solid var(--rule); border-radius:3px; padding:18px 20px; margin:20px 0 28px;
+    overflow-x:auto; color:var(--ink-2);
+  }
+  .math { font-family:var(--mono); font-size:13.5px; line-height:1.9; background:var(--card);
+    border:1px solid var(--rule); border-radius:3px; padding:18px 20px; margin:20px 0 28px;
+    overflow-x:auto; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .math .r { color:var(--ink); font-weight:600; }
+  .math .c { color:var(--ink-3); }
+  .path { font-family:var(--mono); font-size:12px; color:var(--accent);
+    background:var(--accent-wash); padding:2px 6px; border-radius:3px; }
+
+  /* ADR cards */
+  .adr { border:1px solid var(--rule); border-radius:3px; background:var(--card);
+    margin:0 0 16px; overflow:hidden; }
+  .adr > summary {
+    padding:16px 20px; cursor:pointer; display:flex; align-items:baseline; gap:14px;
+    font-weight:650; color:var(--ink); list-style:none; background:var(--card-2);
+  }
+  .adr > summary::-webkit-details-marker { display:none; }
+  .adr > summary::before { content:"▸"; color:var(--accent); font-size:12px; flex:none; }
+  .adr[open] > summary::before { content:"▾"; }
+  .adr .id { font-family:var(--mono); font-size:11px; color:var(--accent);
+    letter-spacing:.08em; flex:none; }
+  .adr .inner { padding:20px 20px 6px; }
+  .adr .inner h5 { font-family:var(--mono); font-size:10.5px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 6px; font-weight:600; }
+  .adr .inner p, .adr .inner ul { color:var(--ink-2); }
+  .adr .inner > div { margin-bottom:18px; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Design &amp; Roadmap · Companion to the Teardown</div>
+  <h1>Phase 2 Scaling Plan</h1>
+  <p class="standfirst">Decisions, target architecture, and a six-week execution plan to take the interview engine from a single-process prototype to a deployable service that holds 10,000 concurrent interviews — and the path from there to a million.</p>
+  <div class="meta-line">
+    <span><b>Decided</b> 17 Aug 2026</span>
+    <span><b>Team</b> 2 engineers</span>
+    <span><b>2A</b> 6 weeks</span>
+    <span><b>2B</b> weeks 7–12</span>
+  </div>
+</header>
+
+<div class="tiles">
+  <div class="tile"><div class="k">Phase 2 target</div><div class="v">10 K</div><div class="n">Concurrent interviews, ~1 lakh registered users.</div></div>
+  <div class="tile"><div class="k">Turn latency p99</div><div class="v">&lt;4 <small>s</small></div><div class="n">2A target. Drops under 2s in 2B with the question bank.</div></div>
+  <div class="tile"><div class="k">LLM calls / turn</div><div class="v">5→2</div><div class="n">The single highest-leverage change. Cost, latency, and quota all at once.</div></div>
+  <div class="tile"><div class="k">Session loss on deploy</div><div class="v">0</div><div class="n">Externalized state is the keystone. Everything else depends on week 2.</div></div>
+</div>
+
+<!-- ═══════════════ 1 ═══════════════ -->
+<section id="d1">
+  <div class="sec-head"><span class="sec-num">01</span><h2>Decisions</h2></div>
+  <div class="prose">
+    <p>Seven decisions, made jointly, with the alternatives we rejected and why. These are the load-bearing choices — everything in the roadmap follows from them.</p>
+  </div>
+
+  <details class="adr" open>
+    <summary><span class="id">D-01</span> Disable the coding runner immediately; rebuild it sandboxed in 2B</summary>
+    <div class="inner">
+      <div><h5>Context</h5><p><code>/coding/run</code> executes attacker-controlled code as the app user with no isolation and no auth. It can read <code>GROQ_API_KEY</code> and the Firebase admin credential.</p></div>
+      <div><h5>Decision</h5><p>Feature-flag the endpoint off in week 1. Rebuild in 2B as a separate execution service on a dedicated node pool: gVisor runtime class, non-root, read-only rootfs, no network, no mounted secrets, hard cgroup CPU/memory limits, 5-second deadline.</p></div>
+      <div><h5>Rejected</h5><ul>
+        <li><strong>Harden in place</strong> — cannot be made safe inside the API process. Any escape lands next to the secrets.</li>
+        <li><strong>Drop code execution entirely</strong> — real test-case feedback is genuine product value; we're deferring it, not abandoning it.</li>
+      </ul></div>
+    </div>
+  </details>
+
+  <details class="adr" open>
+    <summary><span class="id">D-02</span> Event-driven orchestrator with worker agents, replacing the session engine</summary>
+    <div class="inner">
+      <div><h5>Context</h5><p>Capacity is currently coupled to user count through a 40-thread pool. Adding replicas moves the cliff without removing it.</p></div>
+      <div><h5>Decision</h5><p>API accepts an answer, appends an event, and returns. An orchestrator consumes the stream and dispatches work to stateless agent workers. Results flow back as events and are pushed to the client over SSE. <strong>Worker pool size is governed by LLM quota, not by user count.</strong></p>
+      <p><code>services/session_engine.py</code> is deleted. The supervisor, evaluator, and three question agents survive unchanged — they are already stateless and become the workers. LangGraph remains as the orchestrator's state machine with a Postgres checkpointer.</p></div>
+      <div><h5>Consequences</h5><ul>
+        <li>Burst becomes queue depth — an observable, alertable number — instead of a thread-pool cliff.</li>
+        <li>Partitioning the stream by <code>session_id</code> gives ordered per-session processing, which <strong>eliminates the non-atomic session lock defect</strong> rather than fixing it.</li>
+        <li>Two code paths exist during the 2A→2B cutover. Accepted, and time-boxed.</li>
+      </ul></div>
+    </div>
+  </details>
+
+  <details class="adr" open>
+    <summary><span class="id">D-03</span> Postgres for state, Redis for hot path and (in 2B) the broker</summary>
+    <div class="inner">
+      <div><h5>Decision</h5><p>Postgres holds LangGraph checkpoints (<code>AsyncPostgresSaver</code>), sessions, turns, durable results, the outbox, and the 2B question bank. Redis holds rate-limit counters, the hot session read cache, and — from 2B — Streams as the broker, with consumer groups giving ordered per-session partitions.</p></div>
+      <div><h5>Rejected</h5><ul>
+        <li><strong>Kafka</strong> — correct at Phase 3 scale, but real operational weight for two people. Redis Streams is a clean migration source when we outgrow it.</li>
+        <li><strong>Temporal</strong> — honestly the <em>right</em> abstraction; a LangGraph interrupt is a poor man's durable signal. Too large a dependency and rewrite for this window. Explicitly on the Phase 3 table.</li>
+        <li><strong>NATS JetStream</strong> — reasonable middle path, but a third system to learn for a benefit we can't yet measure.</li>
+      </ul></div>
+      <div><h5>Hosting, decided 19 Aug 2026</h5><p><strong>K8s: GKE Autopilot.</strong> Google manages node provisioning and patching — the right tradeoff for a 2-person team — and Autopilot has strong support for the custom-metric HPA the capacity plan already calls for (<code>interview_turns_inflight</code>, not CPU).</p>
+      <p><strong>Postgres: Neon.</strong> The direct analog to MongoDB Atlas — one connection string, autoscaling compute, a built-in pooler (removes the PgBouncer story from the backlog entirely — see the §6 callout below), and database branching, which gives CI an ephemeral DB per test run instead of a shared fixture. pgvector is supported, which D-08 depends on. Neon is cloud-agnostic, so this choice doesn't lock in the GKE decision either way.</p>
+      <p>One caveat worth carrying forward: Neon sits outside GCP's VPC, so GKE↔Neon traffic crosses the public internet, TLS-encrypted. That's fine at Phase 2A scale. If the Epic 6 load test shows it as a measured latency contributor, the fix is a provider swap to Neon's VPC-peering tier or a hyperscaler-managed DB — not a redesign, since the schema and access pattern don't change.</p>
+      <p><strong>Redis: GCP Memorystore</strong> — decided 19 Aug 2026, and here the reasoning differs from Postgres's. Redis is hit on <em>every</em> rate-limited request (P2-106), not once per turn, and in 2B it becomes the Streams broker — the actual message bus the orchestrator depends on. That hit-rate makes the public-internet hop we accepted for Neon a worse tradeoff here, so Memorystore's same-VPC placement (no public hop, no egress cost, lowest latency) is the natural fit given GKE Autopilot is already the target. Rejected Redis Cloud for the same reason Neon's caveat exists — cloud-agnostic and easy to spin up, but adds latency on a path that's now hot rather than occasional. Rejected self-hosting in-cluster for the same reason CloudNativePG was rejected: real ops burden (persistence, failover) that a 2-person team shouldn't take on when a managed option fits this cleanly.</p></div>
+    </div>
+  </details>
+
+  <details class="adr" open>
+    <summary><span class="id">D-04</span> Hybrid question bank: pre-generate offline, personalize at runtime</summary>
+    <div class="inner">
+      <div><h5>Context</h5><p>The three-step <em>reason → generate → critique</em> chain is 3 of the 5–6 calls per turn. It is the cost driver, the latency driver, and the quota driver simultaneously.</p></div>
+      <div><h5>Decision</h5><p>An offline pipeline generates and vets question packs into a Postgres bank, indexed by agent type, round type, difficulty, and topic tags. At runtime the LLM only <em>selects, personalizes, and evaluates</em>. Bank hits return in milliseconds.</p>
+      <p>Staged: <strong>W5 of 2A</strong> collapses the live chain from 5–6 calls to 2–3 by merging steps into single structured calls — roughly 70% of the win, available six weeks earlier. <strong>2B</strong> adds the bank itself.</p></div>
+      <div><h5>Consequences</h5><p>Bank questions are vetted once and reused, so per-question quality goes <em>up</em>; per-candidate novelty goes down. Personalization and topic-coverage tracking are what preserve the bespoke feel. This is a product tradeoff and needs a quality gate before rollout — see <a href="#d7">§7</a>.</p></div>
+    </div>
+  </details>
+
+  <details class="adr" open>
+    <summary><span class="id">D-05</span> Write the event log in week 2, six weeks before anything consumes it</summary>
+    <div class="inner">
+      <div><h5>Decision</h5><p>When state moves to Postgres in W2, every turn transition also writes a domain event to an <code>outbox_events</code> table in the same transaction. Nothing reads it until W7.</p></div>
+      <div><h5>Rationale</h5><p>The seam is nearly free to build while we're already rewriting the persistence layer, and expensive to retrofit later. It makes 2B a <strong>cutover rather than a rewrite</strong>, and it gives us six weeks of real production event data to validate the orchestrator design against before we commit to it.</p></div>
+    </div>
+  </details>
+
+  <details class="adr" open>
+    <summary><span class="id">D-06</span> Foundation before architecture — and this is a correctness argument, not a capacity one</summary>
+    <div class="inner">
+      <div><h5>Context</h5><p>The repo has zero tests, zero metrics, no container, and no CI.</p></div>
+      <div><h5>Decision</h5><p>Weeks 1–4 deliver security, externalized state, the deployment pipeline, and observability. The orchestrator rewrite starts in week 7.</p></div>
+      <div><h5>Rationale</h5><p>Starting the distributed refactor first means performing it blind — no way to detect a regression and no way to see it in production. That is the specific failure mode that turns a six-week plan into a sixteen-week one. The sequencing is about being able to <em>verify</em> the interesting work, not about deferring it.</p></div>
+    </div>
+  </details>
+
+  <details class="adr" open>
+    <summary><span class="id">D-07</span> Multi-provider LLM routing from week 5 — one API key cannot reach the target</summary>
+    <div class="inner">
+      <div><h5>Context</h5><p>Even after cutting to 2.5 calls per turn, 10,000 concurrent interviews needs roughly <strong>17,000–25,000 requests per minute</strong>. No single account grants that.</p></div>
+      <div><h5>Decision</h5><p>Introduce a provider abstraction in W5: key-pool rotation, per-provider token buckets, health-based failover across Groq / Cerebras / Together / Fireworks, and a circuit breaker per provider. Model choice becomes config, not an import.</p></div>
+      <div><h5>Consequences</h5><p>This is the component that makes the Phase 2 target reachable at all, and it is also the natural insertion point for owned inference in Phase 3. Worth building carefully.</p></div>
+    </div>
+  </details>
+
+  <details class="adr" open>
+    <summary><span class="id">D-08</span> Three-tier agent memory — and vectors only where a <code>WHERE</code> clause won't do</summary>
+    <div class="inner">
+      <div><h5>Context</h5><p>Today the supervisor's entire memory is <code>coverage_context</code> and a scratchpad, both scoped to a single session and both discarded when it ends. A candidate's fifth interview knows nothing about their first four — which undercuts the core product promise, longitudinal improvement. Separately, the supervisor prompt grows with turn count, so per-turn token cost is <em>O(turns)</em>.</p></div>
+      <div><h5>Decision</h5><p>Working memory in Redis (compacted live context), long-term memory in Postgres (structured candidate profile, asked-question ledger), episodic memory as pgvector embeddings over completed-session summaries. Retrieval is policy-driven, not naive top-<em>k</em>. Full design in <a href="#d4">§4</a>.</p></div>
+      <div><h5>The discipline that keeps this cheap</h5><p>Most of what we want from "memory" is relational, not semantic. <em>Has this candidate been asked about LRU caches before?</em> is an indexed lookup, not a similarity search. <em>What are their persistent weak topics?</em> is a <code>GROUP BY</code> over evaluations. Vectors earn their place for exactly two jobs — narrative recall across sessions, and finding comparable candidates for difficulty calibration. Everything else stays in SQL, where it is faster, cheaper, exact, and debuggable.</p></div>
+      <div><h5>Store</h5><p><strong>pgvector, not a dedicated vector database.</strong> One embedding per completed session means ~300K vectors at a lakh of users — comfortably within pgvector's range. Pinecone or Qdrant would add an operational system for two people in exchange for headroom we won't touch until Phase 3.</p></div>
+      <div><h5>Staging</h5><p>Schema and writes land in <strong>W2</strong> (same argument as D-05 — nearly free while we're already building the persistence layer, expensive to retrofit, and it starts accumulating real data immediately). Working-memory compaction lands in <strong>W5</strong>, where it serves the cost workstream directly. Retrieval and episodic vectors are <strong>2B</strong>.</p></div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════ 2 ═══════════════ -->
+<section id="d2">
+  <div class="sec-head"><span class="sec-num">02</span><h2>Target architecture — end of 2A</h2></div>
+  <div class="prose">
+    <p>Still request/response, but every process is stateless and every piece of state is durable. This is the configuration we load test in week 6.</p>
+  </div>
+
+  <div class="fig">
+    <div class="cap">Figure 1 — Phase 2A, week 6</div>
+    <div class="body">
+<pre class="mermaid">
+flowchart TB
+  CDN["Cloud CDN<br/>React SPA static build"]
+  ING["Ingress + WAF<br/>TLS, origin allowlist"]
+
+  subgraph K8S["GKE Autopilot cluster"]
+    subgraph APIP["api Deployment — HPA 3→60"]
+      A1["FastAPI pod<br/>async def, pooled httpx"]
+      A2["FastAPI pod"]
+      A3["FastAPI pod"]
+    end
+    LLMR["LLM router<br/>key pool · failover · breaker"]
+    OTEL["OTel collector"]
+  end
+
+  PG[("Neon Postgres<br/>pooled endpoint · outside VPC<br/>checkpoints · sessions · turns<br/>results · outbox")]
+  RD[("Memorystore Redis<br/>same VPC · rate limit · hot cache")]
+  PROM["Prometheus + Grafana"]
+  PROV["Groq · Cerebras<br/>Together · Fireworks"]
+
+  CDN --> ING --> APIP
+  APIP -->|"TLS, pooled conn"| PG
+  APIP --> RD
+  APIP --> LLMR --> PROV
+  APIP -.-> OTEL --> PROM
+  PROM -.->|"custom metric: turns_inflight"| APIP
+</pre>
+    </div>
+  </div>
+
+  <h3>What changes, concretely</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Concern</th><th>Today</th><th>End of 2A</th></tr></thead>
+    <tbody>
+      <tr><td>Graph checkpoints</td><td><code>MemorySaver</code>, RAM, never evicted</td><td><code>AsyncPostgresSaver</code>, TTL-swept</td></tr>
+      <tr><td>Session store</td><td>Module dict</td><td>Postgres row + Redis read cache</td></tr>
+      <tr><td>Concurrency</td><td>40-thread AnyIO pool</td><td><code>async def</code> + pooled httpx, no threadpool on the hot path</td></tr>
+      <tr><td>Session lock</td><td>Non-atomic dict read-modify-write</td><td><code>UPDATE … WHERE locked_until &lt; now() RETURNING</code></td></tr>
+      <tr><td>Replicas</td><td>1, hard</td><td>3–60, HPA on in-flight turns</td></tr>
+      <tr><td>LLM access</td><td>New <code>ChatGroq</code> per call, one key</td><td>Router: pooled clients, multi-key, multi-provider, breaker</td></tr>
+      <tr><td>Results</td><td>Computed from RAM, lost on restart</td><td>Durable Postgres rows</td></tr>
+      <tr><td>Authz</td><td>None on <code>/session/*</code></td><td>Firebase UID bound to every session row</td></tr>
+      <tr><td>Deploy</td><td>Manual <code>uvicorn</code></td><td>GitHub Actions → GHCR → Helm → K8s</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout">
+    <span class="lbl">Why HPA on CPU would be wrong</span>
+    <p>These pods are I/O-bound proxies waiting on an LLM. CPU sits near idle while the pod is completely saturated on in-flight turns, so a CPU-target HPA will refuse to scale during the exact incident you built it for. We scale on a custom Prometheus metric — <code>interview_turns_inflight</code>, target ~20 per pod — with CPU kept only as a secondary safety trigger.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ 3 ═══════════════ -->
+<section id="d3">
+  <div class="sec-head"><span class="sec-num">03</span><h2>Target architecture — end of 2B</h2></div>
+  <div class="prose">
+    <p>The event-driven split. The API stops doing work and starts routing it; the workers become a pool sized to provider quota.</p>
+  </div>
+
+  <div class="fig">
+    <div class="cap">Figure 2 — Phase 2B, week 12</div>
+    <div class="body">
+<pre class="mermaid">
+flowchart TB
+  FE["React SPA"]
+
+  subgraph EDGE["Edge"]
+    API["api Deployment<br/>accept · authz · 202"]
+    SSE["sse-gateway<br/>push next question"]
+  end
+
+  RS[("Redis Streams<br/>partitioned by session_id")]
+
+  subgraph ORCH["orchestrator Deployment"]
+    O1["LangGraph state machine<br/>+ AsyncPostgresSaver"]
+  end
+
+  subgraph WRK["Stateless agent workers — scale on quota"]
+    W1["evaluator"]
+    W2["supervisor"]
+    W3["question agents ×3"]
+  end
+
+  BANK[("question_bank<br/>pre-generated, vetted")]
+  EXEC["executor pool<br/>gVisor · no net · no secrets"]
+  PG[("Neon Postgres")]
+  LLMR["LLM router"]
+
+  FE -->|"POST answer"| API -->|"append event"| RS
+  RS --> ORCH
+  ORCH -->|"dispatch task"| RS --> WRK
+  WRK -->|"result event"| RS --> ORCH
+  ORCH --> PG
+  W3 -->|"select + personalize"| BANK
+  WRK --> LLMR
+  ORCH -->|"question ready"| RS --> SSE -->|"SSE push"| FE
+  FE -->|"run code"| API --> EXEC
+</pre>
+    </div>
+  </div>
+
+  <h3>Event model</h3>
+  <div class="prose"><p>Six event types carry the whole interview. All are appended to the outbox in W2 and become the broker's payloads in W7 — the schema does not change at cutover.</p></div>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Event</th><th>Emitted by</th><th>Consumed by</th><th>Carries</th></tr></thead>
+    <tbody>
+      <tr><td><code>session.started</code></td><td>API</td><td>Orchestrator</td><td>config, candidate, parsed resume</td></tr>
+      <tr><td><code>turn.answer_submitted</code></td><td>API</td><td>Orchestrator</td><td>session_id, turn_idx, answer_text, code</td></tr>
+      <tr><td><code>turn.evaluated</code></td><td>Evaluator worker</td><td>Orchestrator</td><td>scores, verdict, weak/strong tags</td></tr>
+      <tr><td><code>turn.decided</code></td><td>Supervisor worker</td><td>Orchestrator</td><td>action, next_agent, difficulty, prefix</td></tr>
+      <tr><td><code>turn.question_ready</code></td><td>Question worker</td><td>Orchestrator, SSE gateway</td><td>question pack</td></tr>
+      <tr><td><code>session.completed</code></td><td>Orchestrator</td><td>SSE gateway, reporting</td><td>final scores, report</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Data model</h3>
+  <pre class="code">users            (uid PK, email, name, avatar, provider, role, created_at)
+
+sessions         (session_id PK, user_id FK→users, thread_id,
+                  status, config JSONB, candidate JSONB,
+                  turn_counter, current_agent, current_difficulty,
+                  coverage_context JSONB,
+                  locked_until TIMESTAMPTZ,      -- atomic lease, replaces `locked`
+                  created_at, updated_at, expires_at)
+                  INDEX (user_id, created_at DESC), INDEX (expires_at)
+
+turns            (turn_id PK, session_id FK, idx,
+                  agent_type, difficulty, question_pack JSONB,
+                  answer_text, evaluation JSONB, created_at)
+                  UNIQUE (session_id, idx)       -- idempotent replay
+
+results          (session_id PK FK, final_scores JSONB, report JSONB, completed_at)
+
+outbox_events    (id BIGSERIAL PK, session_id, event_type, payload JSONB,
+                  created_at, published_at NULL)
+                  INDEX (published_at) WHERE published_at IS NULL
+
+question_bank    (id PK, agent_type, round_type, difficulty,      -- 2B
+                  topic_tags TEXT[], question_pack JSONB,
+                  quality_score, usage_count, created_at)
+                  INDEX (agent_type, round_type, difficulty, topic_tags)
+
+-- plus checkpoints / checkpoint_writes, managed by AsyncPostgresSaver</pre>
+
+  <div class="callout">
+    <span class="lbl">Two details doing quiet work</span>
+    <p><code>UNIQUE (session_id, idx)</code> makes turn writes idempotent, so a redelivered event replays harmlessly — the property that lets us use at-least-once delivery without deduplication logic. And <code>locked_until</code> as a lease rather than a boolean means a worker that dies mid-turn releases its session automatically instead of wedging it forever.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ 4 ═══════════════ -->
+<section id="d4">
+  <div class="sec-head"><span class="sec-num">04</span><h2>Agent memory</h2></div>
+  <div class="prose">
+    <p>Three tiers with different lifetimes, different stores, and different jobs. The organising rule is that each tier answers a question the tier below it cannot answer cheaply.</p>
+  </div>
+
+  <div class="fig">
+    <div class="cap">Figure 3 — Memory tiers and what reads them</div>
+    <div class="body">
+<pre class="mermaid">
+flowchart TB
+  subgraph LIVE["During a turn"]
+    SUP["Supervisor"]
+    QA["Question agents"]
+    EV["Evaluator"]
+  end
+
+  WM[("WORKING — Redis, TTL 2h<br/>rolling summary · last 3 turns<br/>coverage · scratchpad tail")]
+  LTM[("LONG-TERM — Postgres<br/>candidate_profiles<br/>asked_questions ledger")]
+  EPI[("EPISODIC — pgvector<br/>one embedding per<br/>completed session")]
+
+  SUP -->|"every turn, ~2 KB"| WM
+  QA  -->|"dedup check, exact"| LTM
+  SUP -->|"session start only"| LTM
+  SUP -->|"session start, if ≥2 priors"| EPI
+
+  WM -.->|"on session end:<br/>compact + embed"| EPI
+  WM -.->|"on session end:<br/>aggregate proficiencies"| LTM
+  LTM -.->|"seeds difficulty +<br/>topic plan"| QA
+</pre>
+    </div>
+  </div>
+
+  <h3>Tier 1 — Working memory (Redis, session-scoped)</h3>
+  <div class="prose">
+    <p>The compacted context the supervisor actually needs on every call. Not a naive cache of the Postgres row — a purpose-built working set, pre-assembled so we don't re-serialize a growing session object 12 times per interview.</p>
+    <p>The important change here is <strong>rolling summarization</strong>. Today <code>_build_turn_history()</code> pastes the last ten turns verbatim into the prompt, so token cost grows with turn count. Instead we keep a running natural-language summary plus the last two or three turns in full, and refresh the summary every few turns.</p>
+  </div>
+  <div class="math">
+<span class="c">// current: verbatim history</span><br>
+supervisor prompt at turn 10  ≈ 2,400 tokens   <span class="c">O(turns)</span><br>
+<span class="c">// with rolling summary + last 3 verbatim</span><br>
+supervisor prompt at turn 10  ≈ 1,100 tokens   <span class="r">O(1)</span><br>
+<br>
+<span class="r">≈ 45% fewer input tokens on the hot path, flat in interview length</span>
+  </div>
+  <div class="callout">
+    <span class="lbl">Why this lands in W5, not later</span>
+    <p>Compaction is not really a memory feature — it is a cost feature that happens to need a memory structure. It reduces supervisor input tokens on every single turn, which is precisely the W5 chain-reduction goal. Building it alongside the call merge means one prompt-engineering effort and one quality gate instead of two.</p>
+  </div>
+
+  <h3>Tier 2 — Long-term memory (Postgres, candidate-scoped)</h3>
+  <div class="prose">
+    <p>Structured, queryable, exact. This is what actually designs the next interview, and it is deliberately relational — no embeddings involved.</p>
+  </div>
+  <pre class="code">candidate_profiles (user_id PK FK→users,
+                    proficiency JSONB,      -- {"concurrency": {"score": 42, "n": 7, "trend": "up"}, …}
+                    persistent_weak_topics TEXT[],
+                    persistent_strong_topics TEXT[],
+                    calibrated_difficulty TEXT,
+                    sessions_completed INT,
+                    avg_think_time_seconds INT,     -- also feeds the §6 capacity model
+                    updated_at)
+
+asked_questions    (id PK, user_id FK, session_id FK,
+                    question_hash TEXT,     -- normalized text hash, exact dedup
+                    topic_tag TEXT, agent_type TEXT,
+                    difficulty TEXT, score_pct INT, asked_at)
+                    INDEX (user_id, topic_tag), INDEX (user_id, question_hash)</pre>
+  <div class="prose">
+    <p>Two things this fixes that are live product bugs today:</p>
+    <ul>
+      <li><strong>Cross-session repetition.</strong> <code>already_asked_topics</code> is session-scoped, so a candidate running five interviews can be handed the same question five times. An indexed lookup on <code>(user_id, question_hash)</code> ends that — and it costs one query, not a similarity search.</li>
+      <li><strong>Difficulty restarts from scratch every session.</strong> Every interview begins at whatever the user picked, ignoring that we already know how they perform. <code>calibrated_difficulty</code> seeds the graph's opening state instead.</li>
+    </ul>
+  </div>
+
+  <h3>Tier 3 — Episodic memory (pgvector, narrative)</h3>
+  <div class="prose">
+    <p>One embedding per completed session, over an LLM-written summary of how the interview actually went — not the scores, which we already have relationally, but the texture. <em>"Reached a working solution but only after two hints; explains tradeoffs well; visibly uncomfortable when pushed on scale."</em></p>
+    <p>Two jobs, and only two:</p>
+    <ol>
+      <li><strong>Narrative recall</strong> — when a returning candidate starts a session, retrieve their two or three most relevant prior summaries so the supervisor opens with real continuity rather than a cold start.</li>
+      <li><strong>Difficulty calibration by analogy</strong> — find comparable candidates at a similar stage and use what worked for them to pick an opening difficulty and topic mix.</li>
+    </ol>
+  </div>
+  <pre class="code">session_summaries (session_id PK FK, user_id FK,
+                   summary TEXT,              -- LLM-written, ~150 words
+                   embedding VECTOR(768),     -- pgvector
+                   role TEXT, company TEXT, overall_score INT,
+                   created_at)
+                   INDEX USING hnsw (embedding vector_cosine_ops)
+                   INDEX (user_id, created_at DESC)</pre>
+
+  <h3>Retrieval policy — rules first, similarity last</h3>
+  <div class="prose">
+    <p>The retrieval is heuristic by design. Naive top-<em>k</em> over everything would be slower, more expensive, and less predictable than a rule that already knows what it needs.</p>
+  </div>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>When</th><th>Tier</th><th>What is fetched</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Session start</td><td>Long-term</td><td>Profile row — always. Seeds difficulty and the topic plan.</td><td class="num">1 query</td></tr>
+      <tr><td>Session start, if ≥2 priors</td><td>Episodic</td><td>Top-3 summaries by <code>0.5·similarity + 0.3·recency + 0.2·role_match</code></td><td class="num">1 ANN query</td></tr>
+      <tr><td>Every question generation</td><td>Long-term</td><td>Asked-question hashes and topic tags for this user</td><td class="num">1 indexed query</td></tr>
+      <tr><td>Every supervisor turn</td><td>Working</td><td>Rolling summary + last 3 turns + coverage</td><td class="num">1 Redis GET</td></tr>
+      <tr><td>Session end</td><td>All</td><td>Write-back: summarize, embed, aggregate proficiencies</td><td class="num">1 LLM + 1 embed</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="prose" style="font-size:14px; color:var(--ink-3);">Net effect on the hot path: <strong>zero additional LLM calls per turn.</strong> Retrieval is two queries at session start and one write-back at session end — it does not touch the per-turn budget the capacity model in <a href="#d6">§6</a> depends on.</p>
+
+  <div class="callout danger">
+    <span class="lbl">This tier makes us a data controller</span>
+    <p>Long-term and episodic memory turn a stateless interview tool into a system holding durable behavioural profiles of named individuals, alongside their resumes. Under India's DPDP Act that carries retention limits and a genuine erasure obligation — and erasure has to cascade to <em>derived</em> data, meaning embeddings and aggregated proficiencies, not just the source rows. Add the retention columns and a cascading delete path in W2 while the schema is being written. It is a few hours then and a migration under legal pressure later.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ 5 ═══════════════ -->
+<section id="d5">
+  <div class="sec-head"><span class="sec-num">05</span><h2>Six-week roadmap</h2></div>
+
+  <div class="fig">
+    <div class="cap">Figure 4 — Phase 2A schedule</div>
+    <div class="body">
+<pre class="mermaid">
+gantt
+  dateFormat YYYY-MM-DD
+  axisFormat W%W
+  section Security
+  Lockdown and authz         :w1, 2026-08-18, 7d
+  section Persistence
+  Postgres state and outbox  :w2, after w1, 7d
+  section Delivery
+  Container CI CD and K8s    :w3, after w2, 7d
+  section Runtime
+  Observability and async    :w4, after w3, 7d
+  Chain cut and LLM router   :w5, after w4, 7d
+  section Validation
+  Load test and tuning       :w6, after w5, 7d
+</pre>
+    </div>
+  </div>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th class="num">Wk</th><th>Workstream</th><th>Scope</th><th>Exit criteria — verifiable</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="num"><strong>1</strong></td><td><span class="chip no">Security</span></td>
+        <td>Flag off <code>/coding/run</code>. <code>get_current_user</code> on every <code>/session/*</code> route; sessions bound to Firebase UID. SSRF scheme+host allowlist on resume URL fetch. Real CORS origins. Redis-backed rate limits. Secrets to K8s Secrets; drop <code>serviceAccountKey.json</code> from the image. Fail loudly when Firestore creds are absent.</td>
+        <td>Test suite proves user B gets 403 on user A's session. No path executes candidate code. SSRF test against <code>169.254.169.254</code> is refused.</td>
+      </tr>
+      <tr>
+        <td class="num"><strong>2</strong></td><td><span class="chip a">Persistence</span></td>
+        <td>Alembic + schema above. <code>AsyncPostgresSaver</code> replaces <code>MemorySaver</code>. Delete <code>SESSION_STORE</code>, <code>THREAD_STORE</code>, <code>DEMO_INTERVIEWS</code>. Atomic <code>locked_until</code> lease. Durable results. <strong>Outbox writes in the same transaction (D-05).</strong> TTL sweeper job. <strong>Memory schema + writes (D-08):</strong> <code>candidate_profiles</code>, <code>asked_questions</code>, <code>session_summaries</code>, pgvector extension, retention columns and cascading delete. Write-only — no retrieval yet.</td>
+        <td>Two replicas behind a round-robin LB complete an interview with no sticky routing. Kill a pod mid-interview — the session resumes on another. Memory flat over a 1-hour soak. A completed interview writes a profile row and an asked-question ledger entry.</td>
+      </tr>
+      <tr>
+        <td class="num"><strong>3</strong></td><td><span class="chip a">Delivery</span></td>
+        <td>Multi-stage Dockerfile, non-root, distroless. Helm chart. GitHub Actions: lint → test → build → Trivy → push GHCR → deploy staging → smoke → gated prod. Alembic as a pre-upgrade <code>Job</code>. HPA, PDB, probes, resource requests/limits.</td>
+        <td>A merge to <code>main</code> reaches staging with no human hands. Rollback verified. Frontend <code>baseURL</code> comes from env and deploys to CDN.</td>
+      </tr>
+      <tr>
+        <td class="num"><strong>4</strong></td><td><span class="chip a">Runtime</span></td>
+        <td>OTel tracing through the graph, Prometheus metrics (<code>turns_inflight</code>, per-node LLM latency, <strong>fallback-rate</strong>, queue wait), structured JSON logs with session correlation. Convert routes to <code>async def</code>. Replace per-call <code>ChatGroq</code> with a pooled async client. Grafana dashboard + alerts.</td>
+        <td>A single turn is traceable end-to-end with per-LLM-call spans. Alert fires when heuristic-fallback rate exceeds 5%. <code>/healthz</code> and <code>/readyz</code> serve K8s probes.</td>
+      </tr>
+      <tr>
+        <td class="num"><strong>5</strong></td><td><span class="chip b">Cost</span></td>
+        <td>Merge <em>reason+generate+critique</em> into one structured call; merge <em>evaluate+supervise</em> into another. <strong>Working-memory compaction (D-08):</strong> rolling summary in Redis replaces verbatim turn history, making supervisor prompt size <em>O(1)</em> in interview length. LLM router (D-07): key pool, per-provider token buckets, health failover, circuit breaker. Response cache for identical question requests.</td>
+        <td>Measured calls per turn ≤ 3. Supervisor input tokens flat from turn 3 onward. p50 turn latency under 1.5s. Router survives a full provider outage in a chaos test with zero user-visible failures.</td>
+      </tr>
+      <tr>
+        <td class="num"><strong>6</strong></td><td><span class="chip a">Proof</span></td>
+        <td>k6 harness modelling realistic candidates — 90s think time, mixed round types, ~15% abandonment. Ramp 100 → 1,000 → 10,000 concurrent. Profile, tune pool sizes and HPA thresholds, fix what breaks. Publish real numbers.</td>
+        <td>10,000 concurrent sustained 30 minutes: p99 &lt; 4s, error rate &lt; 0.5%, zero OOM, HPA stable. <strong>Signed-off capacity report replaces every estimate on this page.</strong></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Deliberately not in 2A</h4>
+  <div class="prose">
+    <p>Event broker cutover, orchestrator/worker split, SSE frontend, question bank, sandboxed executor, and memory <em>retrieval</em> — episodic embeddings and the policy in <a href="#d4">§4</a>. All are 2B, weeks 7–12.</p>
+    <p>The pattern in both deferrals is the same, and it is the main thing protecting this schedule: <strong>W2 writes the schema for things nothing reads until W7.</strong> The outbox and the memory tables both cost hours while the persistence layer is already open, and both would cost weeks to retrofit. By the time we build the consumers, they have five weeks of real production data to be built against rather than guessed at.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ 6 ═══════════════ -->
+<section id="d6">
+  <div class="sec-head"><span class="sec-num">06</span><h2>Capacity plan</h2></div>
+  <div class="prose">
+    <p>What the target actually demands, recomputed against the post-W5 call count. This is the arithmetic week 6 has to confirm or refute.</p>
+  </div>
+
+  <div class="math">
+concurrent_interviews  = 10,000<br>
+think_time_per_turn    = 90 s <span class="c">(question TTS + candidate response)</span><br>
+<span class="r">turns_per_second       = 10,000 / 90 ≈ 111</span><br>
+<br>
+<span class="c">// today: 5 calls/turn</span><br>
+555 calls/s  →  33,300 RPM   <span class="r">✗ unreachable on one key</span><br>
+<span class="c">// after W5 chain cut: 2.5 calls/turn</span><br>
+278 calls/s  →  16,700 RPM   <span class="r">✗ still needs multi-provider (D-07)</span><br>
+<span class="c">// after 2B bank: ~1.6 effective calls/turn</span><br>
+178 calls/s  →  10,700 RPM   <span class="r">✓ reachable across 4 providers</span><br>
+<br>
+<span class="c">// pods, at 20 in-flight turns each and 1.5s per turn</span><br>
+in_flight = 111 × 1.5 ≈ 167  →  <span class="r">~9 pods steady, HPA ceiling 60 for burst</span>
+  </div>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Resource</th><th class="num">Steady</th><th class="num">Peak</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>API pods</td><td class="num">9</td><td class="num">60</td><td>500m CPU / 512Mi each. Scale on <code>turns_inflight</code>.</td></tr>
+      <tr><td>Postgres (Neon)</td><td class="num">4 vCPU</td><td class="num">16 vCPU</td><td>~450 writes/s at peak. 60 pods × pool would exhaust raw Postgres connections — Neon's built-in pooler (its pgbouncer-compatible endpoint) is what absorbs that, so this is a config choice (pooled connection string), not a service we stand up ourselves.</td></tr>
+      <tr><td>Redis (Memorystore)</td><td class="num">2 GB</td><td class="num">8 GB</td><td>Rate limits + hot cache in 2A; add Streams retention in 2B. Same VPC as GKE — no public hop on this hot path.</td></tr>
+      <tr><td>LLM providers</td><td class="num">4</td><td class="num">4</td><td>16,700 RPM spread across them. The binding constraint.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout danger">
+    <span class="lbl">The assumption most likely to be wrong</span>
+    <p>90 seconds of think time per turn. If real candidates answer in 45 seconds, every number above doubles and 2A alone will not reach the target — the question bank moves from 2B into 2A. <strong>Instrumenting actual think time in week 4 is therefore a higher-priority metric than it looks</strong>, because it is the input that decides whether the week-6 load test can pass at all.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ 7 ═══════════════ -->
+<section id="d7">
+  <div class="sec-head"><span class="sec-num">07</span><h2>Risks we are carrying</h2></div>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Risk</th><th>Likelihood</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Chain reduction degrades question quality.</strong> Merging reason+generate+critique may produce flatter questions.</td><td><span class="chip b">Medium</span></td><td>Build a 50-question golden set in W5 and blind-score old vs. new before cutover. If quality drops, keep the chain and pull the bank forward instead.</td></tr>
+      <tr><td><strong>Think time is shorter than 90s</strong>, doubling required throughput.</td><td><span class="chip b">Medium</span></td><td>Measure it in W4, not W6. Bank moves into 2A if the number comes in low.</td></tr>
+      <tr><td><strong>LangGraph's Postgres checkpointer behaves differently under interrupt/resume</strong> than MemorySaver.</td><td><span class="chip b">Medium</span></td><td>W2 is the whole week for a reason. Spike it on day 1; if it fights us, fall back to persisting state ourselves and driving the graph statelessly.</td></tr>
+      <tr><td><strong>Two people, six weeks, zero slack.</strong> One sick week eats the buffer.</td><td><span class="chip no">High</span></td><td>W5 and W6 are the compressible ones. W1–W3 are not — they are prerequisites for everything after.</td></tr>
+      <tr><td><strong>Provider terms may restrict key pooling.</strong></td><td><span class="chip c">Low</span></td><td>Verify with each provider in W5 before building against the assumption. Fall back to enterprise quota negotiation.</td></tr>
+      <tr><td><strong>Memory scope creep.</strong> D-08 is the kind of design that invites "while we're in here" — per-turn embeddings, semantic dedup, a retrieval agent. Any of it would blow W2.</td><td><span class="chip b">Medium</span></td><td>W2 is <em>schema and writes only</em>, hard stop. If a memory feature wants an LLM call on the per-turn path, it is out of scope by definition — the capacity model in <a href="#d6">§6</a> has no room for it.</td></tr>
+      <tr><td><strong>Durable behavioural profiles create an erasure obligation</strong> that has to cascade into embeddings and aggregates, not just source rows.</td><td><span class="chip b">Medium</span></td><td>Retention columns and the cascading delete path go in with the W2 schema. Cheap now, a migration under legal pressure later.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ═══════════════ 8 ═══════════════ -->
+<section id="d8">
+  <div class="sec-head"><span class="sec-num">08</span><h2>Sketch: Phase 3, toward 1M concurrent</h2></div>
+  <div class="prose">
+    <p>Not designed yet — deliberately. It gets designed after the week-6 load test replaces our estimates with measurements. What we already know changes at that scale:</p>
+    <ul>
+      <li><strong>Inference goes in-house.</strong> At 83,000 calls/sec no commercial API tier exists. Self-hosted vLLM on GPU nodes with a fine-tuned small model for evaluation and routing; commercial APIs reserved for the hardest generation paths. The W5 LLM router is the seam this plugs into.</li>
+      <li><strong>Redis Streams gives way to Kafka.</strong> Partition count, retention, and replay across regions stop being optional.</li>
+      <li><strong>Postgres shards</strong> by <code>session_id</code> — Citus or an application-level split — with completed interviews aged into object storage.</li>
+      <li><strong>Multi-region active-active</strong>, with interviews pinned to the region they started in. Interview sessions are short-lived, which makes this far easier than most stateful workloads.</li>
+      <li><strong>Temporal becomes worth reconsidering</strong> (D-03). At Phase 3 saga complexity, hand-rolled orchestration stops paying for itself.</li>
+    </ul>
+    <p style="margin-top:28px; padding-top:24px; border-top:1px solid var(--rule); color:var(--ink-3); font-size:14px;">Next action: week 1 begins now. Security lockdown, per <a href="#d5">§5</a>.</p>
+  </div>
+</section>
+
+</div>

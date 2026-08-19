@@ -112,7 +112,7 @@ def _print_final_report(session: Dict[str, Any]) -> None:
 
 def run_cli(args: argparse.Namespace) -> None:
     payload = _build_start_payload(args)
-    session = start_session(payload)
+    session = start_session(payload, owner_uid="cli_dev_user")
 
     print("\n🚀 Mock Interview CLI Started")
     print(f"Session ID: {session['session_id']}")

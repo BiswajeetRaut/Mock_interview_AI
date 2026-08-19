@@ -1,15 +1,48 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-router = APIRouter()
+from middleware.rate_limit import CODING_RUN_CAPACITY, CODING_RUN_REFILL_PER_MIN, rate_limit_by_ip
+
+# ── P2-101: kill-switch ──────────────────────────────────────────────────
+# /coding/run executes candidate-submitted code with no sandbox. Disabled by
+# default until it's rebuilt on an isolated runner (see Phase 2 backlog,
+# P2-101 / Epic 6 sandboxed executor). Set CODING_RUNNER_ENABLED=true to
+# re-enable for local development only.
+CODING_RUNNER_ENABLED = os.getenv("CODING_RUNNER_ENABLED", "false").strip().lower() in (
+    "1", "true", "yes",
+)
+
+
+def _require_coding_runner_enabled() -> None:
+    if not CODING_RUNNER_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Code execution is temporarily disabled while we roll out a "
+                "sandboxed runner. Your interview continues normally — only "
+                "the coding practice panel is affected."
+            ),
+        )
+
+
+# P2-106: /coding/run has no auth dependency (adding one is out of scope
+# here — P2-101 already turns the whole endpoint off by default), so it only
+# gets the per-IP dimension of the rate limiter, not per-UID.
+_coding_run_rate_limit = rate_limit_by_ip("coding_run", CODING_RUN_CAPACITY, CODING_RUN_REFILL_PER_MIN)
+
+router = APIRouter(dependencies=[
+    Depends(_require_coding_runner_enabled),
+    Depends(_coding_run_rate_limit),
+])
 
 
 class CodingRunRequest(BaseModel):

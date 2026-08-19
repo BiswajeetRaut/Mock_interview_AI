@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Flex, Box, HStack, Text, Button } from "@chakra-ui/react";
 import Editor from "@monaco-editor/react";
-import { Play, Send, RotateCcw } from "lucide-react";
+import { Play, Send, RotateCcw, AlertTriangle } from "lucide-react";
 
 const SUMMARY_BAR_HEIGHT = 36;
 const DEFAULT_RESULTS_HEIGHT = 176;
@@ -19,6 +19,7 @@ export default function CodingPlayground({
   onSubmitCode,
   isSubmittingCode,
   onLoadTemplate,
+  runnerDisabled = false,
   ...rest
 }) {
   const containerRef = useRef(null);
@@ -155,6 +156,8 @@ export default function CodingPlayground({
             leftIcon={<Play size={11} />}
             isLoading={isRunning}
             loadingText="Running"
+            isDisabled={runnerDisabled}
+            title={runnerDisabled ? "Test execution is temporarily unavailable" : undefined}
             _hover={{ bg: "rgba(72,187,120,0.18)", color: "green.300" }}
             transition="all 0.15s"
             onClick={onRunCode}
@@ -184,6 +187,23 @@ export default function CodingPlayground({
           </Button>
         </HStack>
       </Flex>
+
+      {/* ── Disabled-runner notice ── */}
+      {runnerDisabled && (
+        <Flex
+          px={4} h="30px" flexShrink={0}
+          align="center" gap={2}
+          style={{
+            background: "rgba(214,158,46,0.1)",
+            borderBottom: "1px solid rgba(214,158,46,0.22)",
+          }}
+        >
+          <AlertTriangle size={12} color="#D69E2E" />
+          <Text fontSize="11.5px" color="#D69E2E">
+            Test execution is temporarily unavailable. You can still submit your code — it just won't be run against test cases.
+          </Text>
+        </Flex>
+      )}
 
       {/* ── Monaco editor — takes all remaining height ── */}
       <Box flex="1" minH={0} overflow="hidden">

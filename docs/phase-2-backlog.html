@@ -1,0 +1,762 @@
+<title>Phase 2 Backlog</title>
+<style>
+  :root {
+    --paper:#F4F6F6; --card:#FFFFFF; --card-2:#ECF0F0;
+    --ink:#14191A; --ink-2:#46514F; --ink-3:#6D7A78;
+    --rule:#D6DEDD; --rule-soft:#E5EBEA;
+    --accent:#0B6B70; --accent-2:#0E888E; --accent-wash:#E2F0F0;
+    --crit:#A8332B; --crit-wash:#F7E4E2;
+    --warn:#8A5A0B; --warn-wash:#F8ECD8;
+    --ok:#2C6647;  --ok-wash:#E1EFE7;
+    --violet:#5B4B9A; --violet-wash:#ECE8F7;
+    --sans:"Avenir Next","Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0E1314; --card:#151C1D; --card-2:#1C2426;
+      --ink:#E3EAE9; --ink-2:#A6B4B2; --ink-3:#788886;
+      --rule:#283234; --rule-soft:#1F292A;
+      --accent:#3FBDB4; --accent-2:#5FD6CD; --accent-wash:#122A2B;
+      --crit:#EC8078; --crit-wash:#2B1917;
+      --warn:#D9A44F; --warn-wash:#2A2216;
+      --ok:#6FC894;  --ok-wash:#16261D;
+      --violet:#B3A4E0; --violet-wash:#221E33;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0E1314; --card:#151C1D; --card-2:#1C2426;
+    --ink:#E3EAE9; --ink-2:#A6B4B2; --ink-3:#788886;
+    --rule:#283234; --rule-soft:#1F292A;
+    --accent:#3FBDB4; --accent-2:#5FD6CD; --accent-wash:#122A2B;
+    --crit:#EC8078; --crit-wash:#2B1917;
+    --warn:#D9A44F; --warn-wash:#2A2216;
+    --ok:#6FC894;  --ok-wash:#16261D;
+    --violet:#B3A4E0; --violet-wash:#221E33;
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.6; margin:0;
+    padding:0 clamp(16px,4vw,40px) 120px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1180px; margin:0 auto; }
+
+  header.mast {
+    display:flex; flex-direction:column; gap:16px;
+    padding:clamp(40px,7vw,72px) 0 28px; border-bottom:2px solid var(--ink);
+  }
+  .eyebrow { font-family:var(--mono); font-size:11.5px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; }
+  h1 { font-size:clamp(30px,5vw,50px); line-height:1.03; margin:0;
+    letter-spacing:-.03em; font-weight:700; text-wrap:balance; }
+  .standfirst { font-size:clamp(16px,1.8vw,18.5px); color:var(--ink-2); max-width:66ch; margin:0; }
+  .meta-line { display:flex; flex-wrap:wrap; gap:8px 22px;
+    font-family:var(--mono); font-size:12px; color:var(--ink-3); }
+  .meta-line b { color:var(--ink-2); font-weight:600; }
+
+  /* progress rail */
+  .rail { margin:28px 0 4px; }
+  .rail-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .rail-top .lbl { font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); }
+  .rail-top .num { font-family:var(--mono); font-size:13px; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .rail-track { height:8px; background:var(--card-2); border:1px solid var(--rule); border-radius:5px; overflow:hidden; display:flex; }
+  .rail-fill { height:100%; background:var(--accent); }
+
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px; background:var(--rule); border:1px solid var(--rule);
+    margin:28px 0 8px; border-radius:3px; overflow:hidden; }
+  .tile { background:var(--card); padding:16px 18px; display:flex; flex-direction:column; gap:5px; }
+  .tile .k { font-family:var(--mono); font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-3); }
+  .tile .v { font-family:var(--mono); font-size:26px; font-weight:600; line-height:1;
+    letter-spacing:-.02em; font-variant-numeric:tabular-nums; color:var(--ink); }
+  .tile .n { font-size:12px; color:var(--ink-3); }
+
+  section.epic { padding-top:56px; scroll-margin-top:20px; }
+  .epic-head { display:flex; align-items:flex-start; gap:16px; border-bottom:1px solid var(--rule);
+    padding-bottom:14px; margin-bottom:22px; flex-wrap:wrap; }
+  .epic-num { font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+    letter-spacing:.1em; flex:none; padding-top:5px; white-space:nowrap; }
+  .epic-titles { flex:1; min-width:220px; }
+  h2 { font-size:clamp(21px,2.8vw,27px); margin:0 0 4px; letter-spacing:-.02em; font-weight:700; line-height:1.15; }
+  .epic-sub { color:var(--ink-3); font-size:13.5px; }
+  .epic-stat { font-family:var(--mono); font-size:12px; color:var(--ink-3); align-self:flex-start;
+    padding-top:5px; white-space:nowrap; }
+
+  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(310px, 1fr)); gap:14px; margin-bottom:8px; }
+
+  .card { border:1px solid var(--rule); border-radius:4px; background:var(--card);
+    padding:16px 18px 17px; display:flex; flex-direction:column; gap:10px; }
+  .card-top { display:flex; align-items:center; gap:8px; justify-content:space-between; }
+  .card-id { font-family:var(--mono); font-size:11px; color:var(--ink-3); letter-spacing:.03em; }
+  .badges { display:flex; gap:6px; }
+  .badge { font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase;
+    font-weight:650; padding:2.5px 6px; border-radius:3px; white-space:nowrap; border:1px solid transparent; }
+  .badge.todo { background:var(--card-2); color:var(--ink-3); border-color:var(--rule); }
+  .badge.s-s { background:var(--ok-wash); color:var(--ok); border-color:var(--ok); }
+  .badge.s-m { background:var(--warn-wash); color:var(--warn); border-color:var(--warn); }
+  .badge.s-l { background:var(--crit-wash); color:var(--crit); border-color:var(--crit); }
+  .badge.blocker { background:var(--crit-wash); color:var(--crit); border-color:var(--crit); }
+
+  .card h3 { margin:0; font-size:15px; font-weight:650; letter-spacing:-.005em; line-height:1.35; }
+  .card .desc { font-size:13px; color:var(--ink-2); margin:0; line-height:1.5; }
+  .card .files { font-family:var(--mono); font-size:11px; color:var(--accent); word-break:break-word; }
+  .card .ac { margin:2px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:5px; }
+  .card .ac li { font-size:12.5px; color:var(--ink-2); padding-left:18px; position:relative; line-height:1.45; }
+  .card .ac li::before { content:""; position:absolute; left:0; top:3px; width:10px; height:10px;
+    border:1.5px solid var(--rule); border-radius:2px; }
+  .card .dep { font-size:11.5px; color:var(--ink-3); border-top:1px dashed var(--rule-soft); padding-top:8px; margin-top:2px; }
+  .card .dep b { color:var(--ink-2); font-weight:600; }
+
+  .card.done { opacity:.55; }
+  .card.done h3 { text-decoration:line-through; text-decoration-color:var(--ink-3); }
+
+  hr.rule { border:none; border-top:1px solid var(--rule); margin:56px 0 0; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:18px; font-size:12px; color:var(--ink-3); align-items:center; }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .legend i { width:10px; height:10px; border-radius:2px; display:inline-block; border:1px solid var(--rule); }
+  .legend i.s-s { background:var(--ok-wash); border-color:var(--ok); }
+  .legend i.s-m { background:var(--warn-wash); border-color:var(--warn); }
+  .legend i.s-l { background:var(--crit-wash); border-color:var(--crit); }
+
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Execution Backlog · Phase 2A</div>
+  <h1>Phase 2 Backlog</h1>
+  <p class="standfirst">45 stories across six epics, one per roadmap week. Sized, ordered by dependency, ready to pick up one at a time. Each carries the acceptance criteria that closes it.</p>
+  <div class="meta-line">
+    <span><b>Source</b> Phase 2 Scaling Plan, §5</span>
+    <span><b>Team</b> 2 engineers</span>
+    <span><b>Window</b> 6 weeks</span>
+  </div>
+
+  <div class="rail">
+    <div class="rail-top"><span class="lbl">Backlog progress</span><span class="num">0 / 45 done</span></div>
+    <div class="rail-track"><div class="rail-fill" style="width:0%"></div></div>
+  </div>
+
+  <div class="legend">
+    <span><i class="s-s"></i> S — half day</span>
+    <span><i class="s-m"></i> M — 1–2 days</span>
+    <span><i class="s-l"></i> L — 3+ days</span>
+  </div>
+</header>
+
+<div class="tiles">
+  <div class="tile"><div class="k">Stories</div><div class="v">45</div><div class="n">across 6 epics</div></div>
+  <div class="tile"><div class="k">S / M / L</div><div class="v">17·21·7</div><div class="n">size mix</div></div>
+  <div class="tile"><div class="k">Blocking</div><div class="v">3</div><div class="n">P2-101, P2-201, P2-301</div></div>
+  <div class="tile"><div class="k">Epic 1 due</div><div class="v">EOW1</div><div class="n">security, before anything public</div></div>
+</div>
+
+<!-- ═══════════ EPIC 1 ═══════════ -->
+<section class="epic" id="e1">
+  <div class="epic-head">
+    <span class="epic-num">EPIC 1 · W1</span>
+    <div class="epic-titles"><h2>Security lockdown</h2><div class="epic-sub">Closes the RCE and the session-authz gap. Nothing else in this plan matters if this epic isn't done first.</div></div>
+    <span class="epic-stat">9 stories · 1S 6M 2L</span>
+  </div>
+
+  <div class="cards">
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-101</span><div class="badges"><span class="badge blocker">Blocks all</span><span class="badge s-s">S</span></div></div>
+      <h3>Kill-switch on /coding/run</h3>
+      <p class="desc">Feature-flag the endpoint off by default (env var, checked at router mount). Returns 503 with a clear "temporarily disabled" body, not a 404.</p>
+      <ul class="ac">
+        <li>Endpoint returns 503 when flag is unset/false</li>
+        <li>Flag documented in <code>.env.example</code></li>
+        <li>Frontend coding panel shows a disabled state, not a silent failure</li>
+      </ul>
+      <div class="files">routers/coding.py · main.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-102</span><div class="badges"><span class="badge blocker">Blocks 103</span><span class="badge s-m">M</span></div></div>
+      <h3>Auth on every /session/* route</h3>
+      <p class="desc">Wire <code>get_current_user</code> (already exists, only used on /auth/google) as a dependency on start/answer/state/end/report/logs. Session row gains <code>owner_uid</code>, set from the verified token at creation.</p>
+      <ul class="ac">
+        <li>Missing/invalid bearer token → 401 on all six routes</li>
+        <li><code>session_start</code> stores <code>owner_uid</code> from the token, not the request body</li>
+      </ul>
+      <div class="files">deps.py · routers/session.py · models/session_models.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-103</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Reject cross-user session access</h3>
+      <p class="desc">Every session lookup checks <code>session.owner_uid == current_user.uid</code> before returning data.</p>
+      <ul class="ac">
+        <li>User B requesting user A's session_id gets 403, not the payload</li>
+        <li>Test: fetch state/report/logs cross-user, assert 403 on all three</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-102</div>
+      <div class="files">routers/session.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-104</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>SSRF allowlist on resume URL ingestion</h3>
+      <p class="desc">Reject non-http(s) schemes, resolve the hostname, block RFC1918/loopback/link-local ranges (incl. <code>169.254.169.254</code>) before <code>urlopen</code> is called — not after redirect.</p>
+      <ul class="ac">
+        <li>Request for <code>http://169.254.169.254/latest/meta-data</code> is refused before any socket opens</li>
+        <li>Redirects re-validated, not just the initial URL</li>
+        <li>Legitimate public PDF URL still resolves</li>
+      </ul>
+      <div class="files">services/session_engine.py — _extract_resume_text</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-105</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Fix CORS policy</h3>
+      <p class="desc">Replace <code>allow_origins=["*"]</code> + <code>allow_credentials=True</code> with an explicit origin list driven by env (dev: localhost ports; prod: real domain).</p>
+      <ul class="ac">
+        <li>No wildcard + credentials combination remains</li>
+        <li>Request from an unlisted origin is rejected by the browser preflight</li>
+      </ul>
+      <div class="files">main.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-106</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Redis-backed rate limiting</h3>
+      <p class="desc">Per-IP and per-UID token bucket on <code>/session/start</code>, <code>/session/*/answer</code>, and <code>/coding/run</code> (once re-enabled). 429 with <code>Retry-After</code>. Production target is Memorystore (same VPC as GKE — this path is hit on every request, unlike Postgres); falls back to an in-process bucket when <code>REDIS_URL</code> is unset, same pattern the session store already uses.</p>
+      <ul class="ac">
+        <li>Burst beyond threshold returns 429, not a queued/slow 200</li>
+        <li>Limits configurable via env, no redeploy needed to tune</li>
+      </ul>
+      <div class="files">new: middleware/rate_limit.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-107</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Secrets out of the repo and the image</h3>
+      <p class="desc">Remove <code>serviceAccountKey.json</code> and <code>.env</code> from anything that ships. Firebase creds and <code>GROQ_API_KEY</code> load from K8s Secrets / env only. Rotate the key that was ever on disk.</p>
+      <ul class="ac">
+        <li><code>git log --all --full-history</code> confirms no secret file was ever committed, or history is scrubbed with the user's sign-off</li>
+        <li>Fresh checkout + <code>docker build</code> produces an image with zero credential files</li>
+        <li>Groq key rotated</li>
+      </ul>
+      <div class="files">firebase_admin_init.py · Dockerfile · .gitignore</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-108</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Fail loudly on missing credentials</h3>
+      <p class="desc">In any non-<code>dev</code> environment, missing/invalid Firebase creds should crash startup, not silently fall back to <code>MockFirestoreClient</code>. Same discipline applies to <code>DATABASE_URL</code> (Neon) once P2-201 lands — a missing or malformed connection string should fail startup, not fall through to any default.</p>
+      <ul class="ac">
+        <li><code>ENV=production</code> + no Firebase creds → process exits non-zero with a clear log line</li>
+        <li><code>ENV=production</code> + missing/invalid <code>DATABASE_URL</code> → same behavior</li>
+        <li><code>ENV=dev</code> keeps the mock fallback for local work</li>
+      </ul>
+      <div class="files">firebase_admin_init.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-109</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>First test suite: auth &amp; authz</h3>
+      <p class="desc">pytest + httpx test client scaffold — the repo has zero tests today. Cover every story above with an assertion, so CI in Epic 3 has something real to run.</p>
+      <ul class="ac">
+        <li><code>pytest</code> runs in CI with no external network calls (mock Firebase verify, mock LLM)</li>
+        <li>Coverage: 401 cases, 403 cross-user case, SSRF-blocked case, rate-limit-429 case</li>
+      </ul>
+      <div class="files">new: tests/</div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ═══════════ EPIC 2 ═══════════ -->
+<section class="epic" id="e2">
+  <div class="epic-head">
+    <span class="epic-num">EPIC 2 · W2</span>
+    <div class="epic-titles"><h2>Persistence &amp; state</h2><div class="epic-sub">The keystone. Every module-level dict dies here and multi-replica becomes possible.</div></div>
+    <span class="epic-stat">9 stories · 1S 4M 4L</span>
+  </div>
+
+  <div class="cards">
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-201</span><div class="badges"><span class="badge blocker">Blocks epic</span><span class="badge s-l">L</span></div></div>
+      <h3>Postgres schema + Alembic</h3>
+      <p class="desc">Provision a Neon project (dev + staging branches). Wire Alembic against Neon's <strong>pooled</strong> connection endpoint — not the direct one, since up to 60 Autopilot pods will hold connections and Neon's pooler is what absorbs that. Write the initial migration: <code>users</code>, <code>sessions</code>, <code>turns</code>, <code>results</code>. Exactly the schema in the design doc §3, minus <code>outbox_events</code>/memory tables (P2-206/207). <code>DATABASE_URL</code> stored as a K8s Secret, never in the image.</p>
+      <ul class="ac">
+        <li><code>alembic upgrade head</code> runs clean on an empty Neon branch</li>
+        <li>All four tables carry the indexes specified in the design doc</li>
+        <li>App connects via the pooled endpoint, confirmed by successfully opening &gt;100 concurrent connections in a quick local test without Neon rejecting them</li>
+      </ul>
+      <div class="files">new: alembic/ · db/models.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-202</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>AsyncPostgresSaver replaces MemorySaver</h3>
+      <p class="desc">Swap the checkpointer in <code>build_interview_graph()</code>. Spike interrupt/resume behavior on day one — this is the riskiest single item in the whole plan (see design doc risk table).</p>
+      <ul class="ac">
+        <li>A session started on process A resumes correctly after <code>Command(resume=...)</code> issued from process B</li>
+        <li><code>checkpoints</code>/<code>checkpoint_writes</code> tables created by the saver's own migration</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-201</div>
+      <div class="files">agents/supervisor/graph.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-203</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>Retire SESSION_STORE / THREAD_STORE</h3>
+      <p class="desc">Rewrite <code>_persist_session</code>/<code>_fetch_session</code> to read/write the Postgres <code>sessions</code>+<code>turns</code> tables (Redis as a read-through cache, not source of truth). Delete the module dicts entirely.</p>
+      <ul class="ac">
+        <li>Grep for <code>SESSION_STORE</code>, <code>THREAD_STORE</code> returns nothing</li>
+        <li>Full interview completes correctly reading/writing only Postgres+Redis</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-201, P2-202</div>
+      <div class="files">services/session_engine.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-204</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Atomic locked_until lease</h3>
+      <p class="desc">Replace the boolean <code>locked</code> read-modify-write with <code>UPDATE sessions SET locked_until = now() + interval '30s' WHERE session_id = ? AND locked_until < now() RETURNING *</code>.</p>
+      <ul class="ac">
+        <li>Two concurrent <code>/answer</code> calls for the same session: exactly one proceeds, the other gets 409 immediately</li>
+        <li>A worker that dies mid-turn releases the session automatically once the lease expires — no manual unlock needed</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-203</div>
+      <div class="files">services/session_engine.py · routers/session.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-205</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Remove legacy demo-interview API</h3>
+      <p class="desc">Delete <code>routers/interview.py</code>, <code>data/interviews.py</code>, <code>DEMO_INTERVIEWS</code>. Superseded entirely by <code>/session/*</code>; confirm frontend has no live references before deleting.</p>
+      <ul class="ac">
+        <li>Grep confirms zero frontend calls to <code>/interview/*</code></li>
+        <li>Router removed from <code>main.py</code></li>
+      </ul>
+      <div class="files">routers/interview.py · data/interviews.py · main.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-206</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Outbox events table + transactional writes</h3>
+      <p class="desc">D-05: <code>outbox_events</code> table. Every turn transition writes an event row in the <em>same transaction</em> as the state write. Nothing consumes it yet — this seeds the W7 broker cutover.</p>
+      <ul class="ac">
+        <li>Every state-changing session write produces exactly one outbox row, same commit</li>
+        <li>A forced rollback of the state write also rolls back the event (no orphan events)</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-203</div>
+      <div class="files">db/models.py · services/session_engine.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-207</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>Memory schema (write-only)</h3>
+      <p class="desc">D-08: <code>candidate_profiles</code>, <code>asked_questions</code>, <code>session_summaries</code> tables, pgvector extension enabled, retention + cascading-delete columns per the DPDP note. Writes on session-end only — no retrieval logic yet.</p>
+      <ul class="ac">
+        <li>Completing an interview writes a profile row (or updates it) and one <code>asked_questions</code> row per turn</li>
+        <li>Deleting a user cascades through profile, asked-questions, and session_summaries — verified by test, not inspection</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-201</div>
+      <div class="files">db/models.py · services/session_engine.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-208</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>TTL sweeper job</h3>
+      <p class="desc">Scheduled job (K8s CronJob) that expires abandoned sessions and their checkpoints past <code>SESSION_TTL_SECONDS</code>, honoured everywhere now — not just the Redis path as today.</p>
+      <ul class="ac">
+        <li>A session idle past TTL is marked <code>expired</code> and its checkpoint rows are purged within one sweep interval</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-203</div>
+      <div class="files">new: jobs/ttl_sweeper.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-209</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Multi-replica correctness test</h3>
+      <p class="desc">The epic's real exit criterion. Run two API replicas behind round-robin (no sticky sessions), complete an interview across both, then kill a replica mid-interview and confirm the other completes it.</p>
+      <ul class="ac">
+        <li>Full 8-turn interview completes with requests round-robining across 2 replicas</li>
+        <li>Killing one replica mid-interview: session resumes cleanly on the survivor within one request</li>
+        <li>Process memory flat over a 1-hour soak test (checkpoints being evicted, not accumulating)</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-202, P2-203, P2-204, P2-208</div>
+      <div class="files">tests/integration/</div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ═══════════ EPIC 3 ═══════════ -->
+<section class="epic" id="e3">
+  <div class="epic-head">
+    <span class="epic-num">EPIC 3 · W3</span>
+    <div class="epic-titles"><h2>Delivery pipeline</h2><div class="epic-sub">Container, CI/CD, K8s manifests. There is no deployable artifact today — this epic creates the first one.</div></div>
+    <span class="epic-stat">8 stories · 2S 5M 1L</span>
+  </div>
+
+  <div class="cards">
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-301</span><div class="badges"><span class="badge blocker">Blocks epic</span><span class="badge s-m">M</span></div></div>
+      <h3>Backend Dockerfile</h3>
+      <p class="desc">Multi-stage build, non-root user, distroless or slim final image. No <code>.env</code>, no service-account file baked in (verifies P2-107 held).</p>
+      <ul class="ac">
+        <li><code>docker build</code> produces an image under a defined size budget</li>
+        <li>Container runs as non-root; image contains zero credential files</li>
+      </ul>
+      <div class="files">new: mock-interview-backend/Dockerfile</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-302</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Frontend build image + env-based API URL</h3>
+      <p class="desc">Fix the hardcoded <code>127.0.0.1:8000</code> in <code>src/api/client.js</code> to read from a build-time env var. Static build served via a minimal image or pushed straight to CDN origin.</p>
+      <ul class="ac">
+        <li><code>VITE_API_BASE_URL</code> controls the axios baseURL, no code change needed to point at staging vs. prod</li>
+      </ul>
+      <div class="files">src/api/client.js · vite.config.js</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-303</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>Helm chart</h3>
+      <p class="desc">Deployment, Service, HPA, PodDisruptionBudget, liveness/readiness probes, resource requests/limits, ConfigMap/Secret refs. Parameterized for staging vs. prod via values files. Target is <strong>GKE Autopilot</strong> — resource requests are effectively mandatory (Autopilot bills and schedules off them, not optional tuning) and DaemonSets aren't available without an exception request, so the OTel collector (P2-403) needs to run as a sidecar or a Deployment, not a DaemonSet.</p>
+      <ul class="ac">
+        <li><code>helm install</code> on a clean GKE Autopilot namespace brings up a working API pod pointed at Neon (pooled endpoint) and Redis</li>
+        <li>HPA config present, even if the metric it scales on lands in Epic 4</li>
+        <li>Every container in the chart declares resource requests — Autopilot rejects pods that don't</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-301</div>
+      <div class="files">new: charts/mock-interview/</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-304</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>CI: lint + test + build</h3>
+      <p class="desc">GitHub Actions workflow triggered on PR: ruff/eslint, pytest (from P2-109), frontend build. Fails the PR on any red step.</p>
+      <ul class="ac">
+        <li>A PR with a failing test cannot be merged (branch protection wired to this check)</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-109</div>
+      <div class="files">new: .github/workflows/ci.yml</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-305</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Image build, Trivy scan, push to GHCR</h3>
+      <p class="desc">On merge to main: build both images, scan with Trivy (fail on critical/high CVEs), push tagged images to GHCR.</p>
+      <ul class="ac">
+        <li>Merge to main produces a tagged, scanned image in the registry with no manual step</li>
+        <li>A critical CVE in a dependency fails the pipeline, not just warns</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-301, P2-304</div>
+      <div class="files">.github/workflows/build.yml</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-306</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>CD: staging auto-deploy, gated prod promote</h3>
+      <p class="desc">Merge to main deploys to staging automatically, runs a smoke test (start session, submit one answer, end session), and prod promotion requires manual approval.</p>
+      <ul class="ac">
+        <li>Merge to main reaches staging with zero manual steps</li>
+        <li>Prod deploy requires an explicit approval gate in the Actions UI</li>
+        <li>Rollback tested and documented</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-303, P2-305</div>
+      <div class="files">.github/workflows/deploy.yml</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-307</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Alembic migration as pre-upgrade K8s Job</h3>
+      <p class="desc">Migrations run as a Helm pre-upgrade hook Job before the new pods roll out, so schema and code version never drift apart.</p>
+      <ul class="ac">
+        <li>A deploy with a pending migration runs it before any new pod serves traffic</li>
+        <li>A failed migration blocks the rollout rather than deploying against a stale schema</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-303</div>
+      <div class="files">charts/mock-interview/templates/migration-job.yaml</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-308</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Frontend CDN deploy pipeline</h3>
+      <p class="desc">Static build ships to CloudFront (or equivalent) on merge, with cache invalidation on deploy.</p>
+      <ul class="ac">
+        <li>Merge to main updates the live frontend within the pipeline run, no manual upload</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-302</div>
+      <div class="files">.github/workflows/deploy-frontend.yml</div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ═══════════ EPIC 4 ═══════════ -->
+<section class="epic" id="e4">
+  <div class="epic-head">
+    <span class="epic-num">EPIC 4 · W4</span>
+    <div class="epic-titles"><h2>Observability &amp; async</h2><div class="epic-sub">Turns the system from unobservable to traceable, and gets it off the blocking threadpool.</div></div>
+    <span class="epic-stat">7 stories · 6M 1L</span>
+  </div>
+
+  <div class="cards">
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-401</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>Convert routes to async def</h3>
+      <p class="desc">All FastAPI handlers move off the AnyIO threadpool (40-thread ceiling, §4 of the teardown) onto native async, so concurrency is bounded by connection pools, not a fixed thread count.</p>
+      <ul class="ac">
+        <li>No route handler is declared <code>def</code> where it does I/O</li>
+        <li>Load test at 200 concurrent requests shows no threadpool queueing in traces</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-402</div>
+      <div class="files">routers/*.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-402</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Pooled async LLM client</h3>
+      <p class="desc">Replace per-call <code>ChatGroq(...)</code> construction (~48 sites) with a single pooled async client reused across requests.</p>
+      <ul class="ac">
+        <li>Client instantiation happens once at process start, not per LLM call</li>
+        <li>Connection reuse visible in latency (no per-call TLS handshake)</li>
+      </ul>
+      <div class="files">agents/shared.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-403</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>OTel tracing through the graph</h3>
+      <p class="desc">Instrument each LangGraph node as a span, with LLM calls as child spans carrying model, tokens, latency. Propagate a trace ID from the HTTP request through to the response.</p>
+      <ul class="ac">
+        <li>A single <code>/answer</code> call is traceable end-to-end with per-node and per-LLM-call spans</li>
+        <li>Trace ID returned in response headers, logged on both ends</li>
+      </ul>
+      <div class="files">agents/supervisor/graph.py · new: telemetry.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-404</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Prometheus metrics</h3>
+      <p class="desc"><code>interview_turns_inflight</code>, per-node LLM latency histogram, <strong>heuristic-fallback rate</strong> (the metric that catches silent quality degradation from §3 of the teardown), queue wait time.</p>
+      <ul class="ac">
+        <li><code>/metrics</code> exposes all four; fallback rate increments correctly when a heuristic path fires</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-403</div>
+      <div class="files">new: telemetry.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-405</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Structured JSON logging</h3>
+      <p class="desc">Replace every <code>print()</code> and swallowed <code>except Exception: pass</code> with structured logs carrying <code>session_id</code>/trace ID. Exceptions get logged even when handled gracefully.</p>
+      <ul class="ac">
+        <li>Zero <code>print()</code> statements remain in application code</li>
+        <li>Every previously-silent <code>except: pass</code> now logs at warn/error with context</li>
+      </ul>
+      <div class="files">all backend modules</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-406</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>/healthz and /readyz</h3>
+      <p class="desc">Liveness checks the process; readiness checks Neon (pooled endpoint) + Redis + (optionally) a cheap LLM provider ping. Wired into the K8s probes from P2-303.</p>
+      <ul class="ac">
+        <li>Readiness returns 503 when Neon is unreachable, so GKE stops routing traffic to that pod</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-303</div>
+      <div class="files">main.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-407</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Grafana dashboard + alerts</h3>
+      <p class="desc">Dashboard covering the four metrics from P2-404 plus error rate and pod memory. Alert rule: fallback rate &gt; 5% over 5 minutes.</p>
+      <ul class="ac">
+        <li>Dashboard renders live data from staging</li>
+        <li>Forcing the LLM key invalid triggers the fallback-rate alert within one evaluation window</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-404</div>
+      <div class="files">new: observability/grafana/</div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ═══════════ EPIC 5 ═══════════ -->
+<section class="epic" id="e5">
+  <div class="epic-head">
+    <span class="epic-num">EPIC 5 · W5</span>
+    <div class="epic-titles"><h2>Cost &amp; chain reduction</h2><div class="epic-sub">The highest-leverage epic in the plan — cuts calls per turn, caps input tokens, and makes the provider quota reachable.</div></div>
+    <span class="epic-stat">7 stories · 2S 4M 1L</span>
+  </div>
+
+  <div class="cards">
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-501</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>Merge reason+generate+critique into one call</h3>
+      <p class="desc">Collapse the 3-step chain in each question agent (<code>technical_coding</code>, <code>resume_based</code>, <code>manegerial</code>) into a single structured-output call. Run the golden-set gate (P2-507) before this replaces the live path.</p>
+      <ul class="ac">
+        <li>Question generation drops from 3 calls (+ conditional retry) to 1 per agent invocation</li>
+        <li>Golden-set blind score shows no regression vs. the 3-step chain</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-507</div>
+      <div class="files">agents/technical_coding/node.py · agents/resume_based/node.py · agents/manegerial/node.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-502</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Merge evaluate+supervise into one call</h3>
+      <p class="desc">Combine the evaluator's scoring call and the supervisor's routing call into a single structured call that returns both.</p>
+      <ul class="ac">
+        <li>A turn's per-answer LLM calls drop from 2 to 1 for this step</li>
+        <li>Supervisor consistency checks (same-agent-3x, low-effort-followup) still apply post-merge</li>
+      </ul>
+      <div class="files">agents/evaluator/node.py · agents/supervisor/node.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-503</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Working-memory compaction</h3>
+      <p class="desc">D-08 Tier 1. Replace <code>_build_turn_history()</code>'s verbatim last-10-turns with a rolling summary (refreshed every few turns) plus the last 2–3 turns in full, cached in Redis.</p>
+      <ul class="ac">
+        <li>Supervisor prompt token count is flat from turn 3 onward, not growing with turn count</li>
+        <li>Measured ≥40% reduction in supervisor input tokens by turn 10 vs. baseline</li>
+      </ul>
+      <div class="files">agents/supervisor/node.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-504</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>LLM router: multi-key pool + token buckets</h3>
+      <p class="desc">D-07. Provider abstraction with a pool of Groq keys, per-key token-bucket rate limiting, round-robin/least-loaded selection.</p>
+      <ul class="ac">
+        <li>Load test confirms request distribution across all pooled keys, no single key saturating first</li>
+      </ul>
+      <div class="files">new: llm_router.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-505</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>LLM router: multi-provider failover + breaker</h3>
+      <p class="desc">Extend the router across Groq/Cerebras/Together/Fireworks with health-based failover and a circuit breaker per provider.</p>
+      <ul class="ac">
+        <li>Chaos test: disable one provider entirely, zero user-visible failures, breaker opens and traffic reroutes</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-504</div>
+      <div class="files">llm_router.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-506</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Response cache for duplicate question requests</h3>
+      <p class="desc">Cache identical (company, role, difficulty, topic, round_type) generation requests briefly in Redis to absorb accidental duplicate calls (e.g. client retries).</p>
+      <ul class="ac">
+        <li>An identical repeated request within the TTL window returns from cache, no LLM call made</li>
+      </ul>
+      <div class="files">agents/shared.py</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-507</span><div class="badges"><span class="badge blocker">Blocks 501</span><span class="badge s-s">S</span></div></div>
+      <h3>Golden-set quality gate</h3>
+      <p class="desc">50-question golden set spanning all three agent types and three difficulties. Blind-score old 3-step chain vs. new 1-call chain before cutover, per the risk table in the design doc.</p>
+      <ul class="ac">
+        <li>Golden set committed to the repo</li>
+        <li>Scoring rubric defined; go/no-go threshold agreed before P2-501 merges</li>
+      </ul>
+      <div class="files">new: eval/golden_set.json</div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ═══════════ EPIC 6 ═══════════ -->
+<section class="epic" id="e6">
+  <div class="epic-head">
+    <span class="epic-num">EPIC 6 · W6</span>
+    <div class="epic-titles"><h2>Load test &amp; validation</h2><div class="epic-sub">Where every estimate in this plan gets replaced by a measurement.</div></div>
+    <span class="epic-stat">5 stories · 1S 2M 3L</span>
+  </div>
+
+  <div class="cards">
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-601</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>k6 harness — realistic candidate model</h3>
+      <p class="desc">90s think time between turns, mixed round types, ~15% abandonment mid-interview, resume upload on a subset of sessions. Models the actual traffic shape, not a naive hammer test.</p>
+      <ul class="ac">
+        <li>Harness runs a full session lifecycle: start → N turns → end → report fetch</li>
+        <li>Configurable concurrency, think-time distribution, abandonment rate</li>
+      </ul>
+      <div class="files">new: loadtest/k6/</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-602</span><div class="badges"><span class="badge s-m">M</span></div></div>
+      <h3>Ramp test 100 → 1,000 → 10,000</h3>
+      <p class="desc">Staged ramp against staging, each level held long enough to reach steady state before advancing.</p>
+      <ul class="ac">
+        <li>10,000 concurrent sustained for 30 minutes: p99 &lt; 4s, error rate &lt; 0.5%, zero OOM, HPA stable (no flapping)</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-601</div>
+      <div class="files">loadtest/k6/</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-603</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>Profile and tune</h3>
+      <p class="desc">Use OTel traces (P2-403) and Prometheus (P2-404) from the ramp test to find the actual bottleneck — Postgres pool, Redis, LLM router, HPA thresholds — and tune it.</p>
+      <ul class="ac">
+        <li>Every tuning change tied to a specific trace/metric finding, documented</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-602</div>
+      <div class="files">charts/mock-interview/values*.yaml · db pool config</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-604</span><div class="badges"><span class="badge s-l">L</span></div></div>
+      <h3>Fix issues found under load</h3>
+      <p class="desc">Buffer story for whatever the ramp test actually finds — this is near-certain to surface at least one surprise (per the risk table: think-time assumption, checkpointer behavior under concurrency).</p>
+      <ul class="ac">
+        <li>Re-run of P2-602 passes after fixes</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-603</div>
+      <div class="files">tbd — depends on findings</div>
+    </div>
+
+    <div class="card">
+      <div class="card-top"><span class="card-id">P2-605</span><div class="badges"><span class="badge s-s">S</span></div></div>
+      <h3>Signed-off capacity report</h3>
+      <p class="desc">Publish measured numbers replacing every estimate in the design doc §5/§6: actual p50/p99, actual calls/turn, actual pod count at steady state and peak, actual think-time distribution observed.</p>
+      <ul class="ac">
+        <li>Report published and linked from the design doc</li>
+        <li>Explicit go/no-go statement on the 10k-concurrent target</li>
+      </ul>
+      <div class="dep"><b>depends on</b> P2-604</div>
+      <div class="files">docs/phase-2-capacity-report.html</div>
+    </div>
+
+  </div>
+</section>
+
+</div>

@@ -23,8 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 venv
+.venv
 _pycache__/
 __pycache__/
+.pytest_cache/
 .env
 mock-interview-backend/serviceAccountKey.json
 mock-interview-frontend/src/firebase.js

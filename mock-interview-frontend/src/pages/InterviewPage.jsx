@@ -416,6 +416,7 @@ export default function InterviewPage() {
   const [runResult, setRunResult] = useState(null);
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [isSubmittingCode, setIsSubmittingCode] = useState(false);
+  const [isCodingRunnerDisabled, setIsCodingRunnerDisabled] = useState(false);
   const [answerDraft, setAnswerDraft] = useState("");
   const [transcriptEntries, setTranscriptEntries] = useState([]);
 
@@ -648,22 +649,47 @@ export default function InterviewPage() {
   }, [language]);
 
   const handleRunCode = async () => {
+    if (isCodingRunnerDisabled) return;
     if (!testCases.length) { alert("No test cases available."); return; }
     setIsRunningCode(true);
-    try { setRunResult(await executeCode({ code, language, test_cases: testCases })); }
-    catch (err) { alert(err?.response?.data?.detail || "Failed to run code."); }
-    finally { setIsRunningCode(false); }
+    try {
+      setRunResult(await executeCode({ code, language, test_cases: testCases }));
+    } catch (err) {
+      if (err?.response?.status === 503) setIsCodingRunnerDisabled(true);
+      else alert(err?.response?.data?.detail || "Failed to run code.");
+    } finally {
+      setIsRunningCode(false);
+    }
   };
 
   const handleSubmitCode = async () => {
     if (!id || !isCodingQuestion) return;
     setIsSubmittingCode(true);
+
+    // Test execution is best-effort: if the runner is disabled or fails,
+    // the candidate can still submit their code for the interview to continue.
+    let result = runResult;
+    if (!result && !isCodingRunnerDisabled) {
+      try {
+        result = await executeCode({ code, language, test_cases: testCases });
+        setRunResult(result);
+      } catch (err) {
+        if (err?.response?.status === 503) {
+          setIsCodingRunnerDisabled(true);
+        } else {
+          setIsSubmittingCode(false);
+          alert(err?.response?.data?.detail || "Failed to run code.");
+          return;
+        }
+      }
+    }
+
     try {
-      const result = runResult || await executeCode({ code, language, test_cases: testCases });
-      setRunResult(result);
-      const summary = result.all_passed
-        ? `All ${result.total} test cases passed.`
-        : `${result.passed}/${result.total} test cases passed.`;
+      const summary = result
+        ? (result.all_passed
+            ? `All ${result.total} test cases passed.`
+            : `${result.passed}/${result.total} test cases passed.`)
+        : "Test execution is temporarily unavailable — code submitted for review.";
       const requestId = globalThis.crypto?.randomUUID?.() || `REQ_${Date.now()}`;
       setIsAwaitingReply(true);
       const updated = await submitSessionAnswer(id, `Code submission: ${summary}`, requestId, code, language);
@@ -1127,6 +1153,7 @@ export default function InterviewPage() {
                 onSubmitCode={handleSubmitCode}
                 isSubmittingCode={isSubmittingCode}
                 onLoadTemplate={(lang) => setCode(CODE_TEMPLATES[lang] || CODE_TEMPLATES.python)}
+                runnerDisabled={isCodingRunnerDisabled}
                 flex="1" minW={0}
               />
             </Flex>

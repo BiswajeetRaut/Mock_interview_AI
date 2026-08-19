@@ -21,13 +21,13 @@ from io import BytesIO
 import json
 import os
 import re
-from urllib.request import Request, urlopen
 import uuid
 from typing import Any, Dict, List, Optional
 
 from agents.supervisor.graph import app as interview_graph
 from agents.shared import build_llm, safe_json_parse, llm_generate_text
 from agents.supervisor.node import ROUND_TYPE_TO_AGENT
+from services.ssrf_guard import fetch_url_safely
 
 try:
     from pypdf import PdfReader
@@ -110,16 +110,17 @@ def _extract_resume_text(resume_content: Dict[str, Any]) -> str:
         except Exception:
             return ""
     if fmt == "url":
+        # fetch_url_safely (P2-104) resolves and validates the destination
+        # IP itself, re-validating on every redirect hop — see
+        # services/ssrf_guard.py. Any failure (blocked address, timeout,
+        # oversized body) is treated the same as any other fetch failure.
         try:
-            req = Request(str(data), headers={"User-Agent": "MockInterviewAI/1.0"})
-            with urlopen(req, timeout=8) as resp:
-                raw = resp.read()
-                ct = (resp.headers.get("Content-Type") or "").lower()
-            if "pdf" in ct or str(data).lower().endswith(".pdf"):
-                return _extract_text_from_pdf_bytes(raw)
-            return raw.decode("utf-8", errors="ignore").strip()
+            raw, ct = fetch_url_safely(str(data))
         except Exception:
             return ""
+        if "pdf" in ct.lower() or str(data).lower().endswith(".pdf"):
+            return _extract_text_from_pdf_bytes(raw)
+        return raw.decode("utf-8", errors="ignore").strip()
     return str(data).strip()
 
 
@@ -163,11 +164,15 @@ def _merge_resume(simple: dict, llm_result: dict) -> dict:
 
 # ── Session lifecycle ────────────────────────────────────────────────────
 
-def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
+def start_session(payload: Dict[str, Any], owner_uid: str) -> Dict[str, Any]:
     """Initialize a session and invoke the graph to generate the first question.
 
     The graph runs: FIRST_QUESTION → OPENING → WAIT_FOR_ANSWER (interrupt)
     We extract the current state at the interrupt point and return it.
+
+    owner_uid comes from the verified Firebase token (see routers/session.py),
+    never from the request body — payload["user_id"] is a client-supplied
+    display value only, not an authorization identity.
     """
     print("Starting session with payload:", payload)
     session_id = f"S_{uuid.uuid4().hex[:8]}"
@@ -259,6 +264,7 @@ def start_session(payload: Dict[str, Any]) -> Dict[str, Any]:
     session = {
         "session_id": session_id,
         "thread_id": thread_id,
+        "owner_uid": owner_uid,
         "created_at": _now_iso(),
         "status": "active",
         "candidate": state_values.get("candidate", initial_state["candidate"]),
