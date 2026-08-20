@@ -218,10 +218,15 @@
         <li><strong>Temporal</strong> — honestly the <em>right</em> abstraction; a LangGraph interrupt is a poor man's durable signal. Too large a dependency and rewrite for this window. Explicitly on the Phase 3 table.</li>
         <li><strong>NATS JetStream</strong> — reasonable middle path, but a third system to learn for a benefit we can't yet measure.</li>
       </ul></div>
-      <div><h5>Hosting, decided 19 Aug 2026</h5><p><strong>K8s: GKE Autopilot.</strong> Google manages node provisioning and patching — the right tradeoff for a 2-person team — and Autopilot has strong support for the custom-metric HPA the capacity plan already calls for (<code>interview_turns_inflight</code>, not CPU).</p>
-      <p><strong>Postgres: Neon.</strong> The direct analog to MongoDB Atlas — one connection string, autoscaling compute, a built-in pooler (removes the PgBouncer story from the backlog entirely — see the §6 callout below), and database branching, which gives CI an ephemeral DB per test run instead of a shared fixture. pgvector is supported, which D-08 depends on. Neon is cloud-agnostic, so this choice doesn't lock in the GKE decision either way.</p>
-      <p>One caveat worth carrying forward: Neon sits outside GCP's VPC, so GKE↔Neon traffic crosses the public internet, TLS-encrypted. That's fine at Phase 2A scale. If the Epic 6 load test shows it as a measured latency contributor, the fix is a provider swap to Neon's VPC-peering tier or a hyperscaler-managed DB — not a redesign, since the schema and access pattern don't change.</p>
-      <p><strong>Redis: GCP Memorystore</strong> — decided 19 Aug 2026, and here the reasoning differs from Postgres's. Redis is hit on <em>every</em> rate-limited request (P2-106), not once per turn, and in 2B it becomes the Streams broker — the actual message bus the orchestrator depends on. That hit-rate makes the public-internet hop we accepted for Neon a worse tradeoff here, so Memorystore's same-VPC placement (no public hop, no egress cost, lowest latency) is the natural fit given GKE Autopilot is already the target. Rejected Redis Cloud for the same reason Neon's caveat exists — cloud-agnostic and easy to spin up, but adds latency on a path that's now hot rather than occasional. Rejected self-hosting in-cluster for the same reason CloudNativePG was rejected: real ops burden (persistence, failover) that a 2-person team shouldn't take on when a managed option fits this cleanly.</p></div>
+      <div><h5>Hosting — revised 20 Aug 2026: two tracks, not one</h5><p>The original 19 Aug decision below (GKE Autopilot + Memorystore, always-on) was sized for real sustained production traffic. It isn't — this project's actual purpose is portfolio/showcase, not a service with real concurrent users. Paying ~$200/month to keep production-grade infrastructure running 24/7 for near-zero real traffic doesn't make sense. But the scale-out <em>design</em> (this whole document) is itself the portfolio asset, and there's real learning value in actually operating GKE/Memorystore hands-on — so rather than discard that, hosting splits into two tracks that both stay valid:</p>
+      <ul>
+        <li><strong>Always-on track (what's actually live):</strong> Cloud Run + Upstash + Neon. Cloud Run scales to zero instances (and zero cost) when nothing's visiting — same containers, same Dockerfile work from Epic 3, just without the K8s orchestration layer, which solves multi-service scaling problems this deployment doesn't have. Upstash replaces Memorystore: pay-per-request instead of pay-for-provisioned-capacity, so a mostly-idle service costs near-$0 instead of accruing ~$40/month at rest. Neon is unchanged — it was already free-tier-appropriate for either track.</li>
+        <li><strong>On-demand track (real GKE, for practice/demo/the actual load test):</strong> GKE Autopilot + Memorystore, provisioned via a repeatable script (not manual console steps), used for specific sessions — hands-on K8s practice, the Epic 6 load test (P2-602), or demonstrating the real setup before an interview — then torn down. Memorystore has no pause state, only create/delete, so this literally means recreating it each session; that costs nothing extra since Redis is already treated as disposable in this design (working memory, rate-limit buckets — see D-08's "if losing it just costs a recompute, it's Redis" rule). GKE's cluster management fee ($0.10/hr) is covered entirely by GCP's standing $74.40/month credit at this usage pattern. Realistic cost for occasional sessions: <strong>$5–15/month</strong>, not $200.</li>
+        <li><strong>Free K8s practice tier (unscripted, whenever):</strong> k3s on a GCP e2-micro instance — permanently free (not a trial), one per billing account, in a handful of US regions. Real <code>kubectl</code>/Helm/Deployment reps at $0, any time, no teardown discipline required. Not literally GKE Autopilot (self-managed control plane instead of Google-managed), so it doesn't replace the on-demand track for "I've actually run this on Autopilot" credibility — but it's where day-to-day K8s practice should happen, saving the scripted GKE sessions for when the specific managed-Autopilot experience matters.</li>
+      </ul>
+      <p>The Epic 3 backlog stories (P2-303 Helm chart, etc.) will need a corresponding split when we actually reach that epic — not rewritten now, since the exact shape of "Cloud Run service config" vs. "on-demand GKE script" is easier to get right when we're about to build it, not preemptively.</p>
+      <p><strong>Postgres ops practice track</strong> — decided 20 Aug 2026, same underlying reasoning as the K8s split above. Neon deliberately hides everything hard about running Postgres — replication, backup/restore, connection-pool tuning, patching — which is exactly the point of choosing it for the live system, but it means none of that operational skill gets built by using Neon alone. Rather than skip it, it's a separate, decoupled practice track: a real Postgres instance, run locally (not cloud — these are Postgres skills, not cloud-specific ones, and local has zero setup friction). Streaming replication is practiced with two instances on different ports/data directories on the same machine, a standard way to learn the mechanics without needing two physical machines. pgbouncer gets configured and run by hand (pool modes, connection limits) — the exact thing Neon's built-in pooler makes unnecessary in production. Optionally repeated on the free e2-micro VM later for "ran this on real cloud infra" credibility, time-multiplexed with k3s practice rather than run simultaneously (both fighting over 1GB RAM on that box would be cramped). Whatever breaks here has zero effect on Neon or the live deployment — same no-risk-to-the-real-system principle as the GKE/k3s split. Not urgent, doesn't block Epic 1 — the natural time to start is alongside <strong>P2-201</strong>, when the real Postgres schema work against Neon happens anyway.</p>
+      <p><strong>Original 19 Aug reasoning, kept as the documented scale-out target</strong> (still correct if this were serving real production traffic — the reasoning doesn't change, only whether it's what actually runs continuously): <strong>K8s: GKE Autopilot</strong> — Google manages node provisioning and patching, and Autopilot has strong support for the custom-metric HPA the capacity plan calls for (<code>interview_turns_inflight</code>, not CPU). <strong>Postgres: Neon</strong> — the direct analog to MongoDB Atlas, with pgvector support (D-08) and database branching for CI; cloud-agnostic, so this choice never locked in the GKE decision. <strong>Redis: GCP Memorystore</strong> — reasoning differs from Postgres's, since Redis is hit on <em>every</em> rate-limited request (P2-106) rather than once per turn, and becomes the Streams broker in 2B; same-VPC placement (no public hop, no egress cost) is the natural fit once GKE is the target. Neon's one caveat — it sits outside GCP's VPC, so traffic crosses the public internet, TLS-encrypted — remains fine at Phase 2A scale regardless of which hosting track is active, since it doesn't depend on GKE being up continuously.</p></div>
     </div>
   </details>
 
@@ -281,14 +286,37 @@
   </div>
 
   <div class="fig">
-    <div class="cap">Figure 1 — Phase 2A, week 6</div>
+    <div class="cap">Figure 1a — always-on track (what's actually live, continuously)</div>
+    <div class="body">
+<pre class="mermaid">
+flowchart TB
+  CDN["Cloud CDN<br/>React SPA static build"]
+
+  subgraph CR["Cloud Run — scales to zero"]
+    A1["FastAPI container<br/>async def, pooled httpx"]
+  end
+
+  PG[("Neon Postgres<br/>pooled endpoint<br/>checkpoints · sessions · turns")]
+  RD[("Upstash Redis<br/>pay-per-request<br/>rate limit · hot cache")]
+  PROV["Groq"]
+
+  CDN --> CR
+  CR -->|"TLS, pooled conn"| PG
+  CR --> RD
+  CR --> PROV
+</pre>
+    </div>
+  </div>
+
+  <div class="fig">
+    <div class="cap">Figure 1b — on-demand track (scripted spin-up, practice/demo/load-test sessions only)</div>
     <div class="body">
 <pre class="mermaid">
 flowchart TB
   CDN["Cloud CDN<br/>React SPA static build"]
   ING["Ingress + WAF<br/>TLS, origin allowlist"]
 
-  subgraph K8S["GKE Autopilot cluster"]
+  subgraph K8S["GKE Autopilot cluster — created via script, deleted after the session"]
     subgraph APIP["api Deployment — HPA 3→60"]
       A1["FastAPI pod<br/>async def, pooled httpx"]
       A2["FastAPI pod"]
@@ -299,7 +327,7 @@ flowchart TB
   end
 
   PG[("Neon Postgres<br/>pooled endpoint · outside VPC<br/>checkpoints · sessions · turns<br/>results · outbox")]
-  RD[("Memorystore Redis<br/>same VPC · rate limit · hot cache")]
+  RD[("Memorystore Redis<br/>same VPC · rate limit · hot cache<br/>recreated each session — no pause state")]
   PROM["Prometheus + Grafana"]
   PROV["Groq · Cerebras<br/>Together · Fireworks"]
 
