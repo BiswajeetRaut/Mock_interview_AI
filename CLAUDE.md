@@ -41,14 +41,18 @@ need to view them rendered rather than as raw HTML).
 
 Done: P2-101 (coding-runner kill switch), P2-102/103 (auth + session
 ownership, done together), P2-104 (SSRF-safe resume fetching), P2-105
-(CORS allowlist), P2-106 (Redis rate limiting). All committed and pushed to
-`origin/main` as of commit `f2f2b2e`.
+(CORS allowlist), P2-106 (Redis rate limiting), P2-107 (secrets audit —
+full git-history forensic scan, found no leak on `main`/`origin/main` ever,
+found and purged real credential material on two never-pushed local
+branches; Docker-image AC explicitly deferred to P2-301, no Dockerfile
+exists yet). Commits through `06cdba2` pushed to `origin/main`; P2-107's
+own doc updates are local-only as of this note, not yet committed.
 
-Remaining in Epic 1: **P2-107** (secrets out of repo/image), **P2-108**
-(fail loudly on missing creds), **P2-109** (test suite — already
-substantially seeded: 50 tests exist across `tests/test_cors.py`,
-`tests/test_session_authz.py`, `tests/test_ssrf_guard.py`,
-`tests/test_rate_limit.py`, built story-by-story rather than as one batch).
+Remaining in Epic 1: **P2-108** (fail loudly on missing creds), **P2-109**
+(test suite — already substantially seeded: 50 tests exist across
+`tests/test_cors.py`, `tests/test_session_authz.py`,
+`tests/test_ssrf_guard.py`, `tests/test_rate_limit.py`, built story-by-story
+rather than as one batch).
 
 After Epic 1: Epic 2 (persistence — Postgres/Neon, kills the in-memory
 session store), Epic 3 (delivery pipeline — Docker/CI/K8s), Epic 4
@@ -57,18 +61,52 @@ Full detail in the backlog doc.
 
 ## Infra decisions already made (not yet built — these are commitments, not code yet)
 
-- **K8s: GKE Autopilot.** Google manages node provisioning; strong support
-  for the custom-metric HPA the capacity plan needs.
-- **Postgres: Neon.** Atlas-like managed Postgres — pooled connection
-  string, branching, pgvector for the agent-memory design. Outside GCP's
-  VPC (accepted tradeoff at 2A scale).
-- **Redis: GCP Memorystore**, not Redis Cloud — same VPC as GKE, chosen
-  specifically because Redis is hit on every rate-limited request (unlike
-  Postgres, hit once per turn), and becomes the Streams broker in 2B.
+**Revised 20 Aug 2026 into two tracks** — the project's actual purpose is a
+portfolio showcase, not a service with real concurrent users, so an
+always-on GKE+Memorystore setup (~$200/month) doesn't make sense. Full
+reasoning in `docs/phase-2-design.html` D-03.
+
+- **Always-on (what's actually live)**: Cloud Run + Upstash + Neon.
+  Scales to zero, near-$0/month. Cloud provider confirmed as **GCP**
+  overall (not AWS) — Autopilot's lower ops burden, GCP's *permanent*
+  free e2-micro tier (AWS's free tier is 12-months-only), and Cloud Run's
+  cleaner scale-to-zero story all favor GCP for this specific project;
+  re-confirmed explicitly, not just inherited from momentum.
+- **On-demand (practice/demo/the actual load test)**: GKE Autopilot +
+  Memorystore, provisioned via a scripted spin-up and torn down after each
+  session — not continuous. Realistic cost ~$5-15/month, not ~$200.
+  Memorystore has no pause state (delete/recreate each time), which costs
+  nothing extra since Redis is already treated as disposable in this
+  design.
+- **Free K8s practice tier**: k3s on GCP's permanently-free e2-micro
+  instance, for day-to-day `kubectl`/Helm reps without touching billing.
+- **Postgres ops practice track** (decided 20 Aug 2026, same reasoning
+  extended to Postgres): Neon hides all the real Postgres-ops skill
+  (replication, backup/restore, pgbouncer tuning) — a *local*, decoupled
+  Postgres instance is the practice ground for that, separate from what
+  runs the live system. Not urgent; natural start point is alongside
+  P2-201.
+- **Neon (Postgres)** is unchanged across every track — cloud-agnostic,
+  already free-tier-appropriate regardless of hosting choice.
 
 None of these are provisioned yet. Provisioning real cloud resources
 (creating the GCP project, billing) is the user's action, not something to
 do autonomously — surface the need, don't just go create accounts.
+
+## Planned: an engineering journal, once Epic 1 wraps
+
+The user wants a `docs/journal/` write-up — not a README, closer to a
+technical book — walking through the actual build: MVP origins → the load
+analysis → each design decision with alternatives rejected → each story as
+a case study (bug found, live-verified, not just unit-tested) → **the
+judgment-call/pivot moments specifically** (the showcase-vs-production cost
+pivot, the AWS-vs-GCP re-derivation, the P2-107 git forensics) — these are
+explicitly the most-wanted content, more than the finished code itself.
+Deliberately not started yet — no running notes being kept either (asked,
+declined) — the plan is to write it in one real pass once P2-108/P2-109
+close out Epic 1, reconstructing from commit history, this file, and the
+three docs rather than from a notes file. Don't start it early unless
+asked.
 
 ## How we work — conventions established this session, keep following them
 

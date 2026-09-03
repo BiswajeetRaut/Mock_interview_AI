@@ -238,13 +238,13 @@
     <div class="card">
       <div class="card-top"><span class="card-id">P2-107</span><div class="badges"><span class="badge s-m">M</span></div></div>
       <h3>Secrets out of the repo and the image</h3>
-      <p class="desc">Remove <code>serviceAccountKey.json</code> and <code>.env</code> from anything that ships. Firebase creds and <code>GROQ_API_KEY</code> load from K8s Secrets / env only. Rotate the key that was ever on disk.</p>
+      <p class="desc">Remove <code>serviceAccountKey.json</code> and <code>.env</code> from anything that ships. Firebase creds and <code>GROQ_API_KEY</code> load from K8s Secrets / env only.</p>
+      <p class="desc"><strong>Findings, 20 Aug 2026:</strong> full-history scan (filenames <em>and</em> content, all branches) — <code>main</code>/<code>origin/main</code> never had either file, ever. Two local-only branches (<code>recovery-branch</code>, <code>recovery-branch-1</code>, never pushed — confirmed via <code>git ls-remote</code>) carried a real Firebase service-account key; the committed <code>.env</code>'s <code>GROQ_API_KEY</code> was empty, never a real secret. Zero actual exposure since nothing left this machine. Branches deleted and force-purged (reflog expired, <code>git gc --prune=now</code>) rather than left to expire naturally. Key rotation judged unnecessary given no third party ever had access — noted as available at zero cost if wanted anyway, but that's the user's call and their action to take (Firebase console), not something done here.</p>
       <ul class="ac">
-        <li><code>git log --all --full-history</code> confirms no secret file was ever committed, or history is scrubbed with the user's sign-off</li>
-        <li>Fresh checkout + <code>docker build</code> produces an image with zero credential files</li>
-        <li>Groq key rotated</li>
+        <li><code>git log --all --full-history</code> confirms no secret file was ever committed, or history is scrubbed with the user's sign-off — <strong>done</strong>, scrubbed via branch deletion + gc</li>
+        <li>Fresh checkout + <code>docker build</code> produces an image with zero credential files — <strong>deferred to P2-301</strong>, no Dockerfile exists yet; likely fine by construction since neither file is tracked on <code>main</code>, will explicitly re-verify then</li>
       </ul>
-      <div class="files">firebase_admin_init.py · Dockerfile · .gitignore</div>
+      <div class="files">firebase_admin_init.py · Dockerfile (P2-301) · .gitignore</div>
     </div>
 
     <div class="card">
